@@ -5,7 +5,8 @@ instant as history grows**. Currently: research + a working app shell.
 
 | File | What it is |
 |---|---|
-| `Sources/Siaheh/main.swift` | The app: a paperclip in the menu bar. Right-click it for a menu with **Quit**. |
+| `Sources/Siaheh/main.swift` | The app: a paperclip in the menu bar. Right-click it for **Settings** and **Quit**. |
+| `Sources/Siaheh/SettingsWindow.swift` | The Settings window (empty placeholder for now), created once and reused. |
 | `Package.swift` | Swift package (Swift 6, macOS 14+). No dependencies. |
 | `Support/Info.plist` | Bundle metadata. `LSUIElement` = no Dock icon, no app switcher entry. |
 | `scripts/build-app.sh` | Builds the package and assembles `build/Siaheh.app` (a bundle is required for `LSUIElement`). |
@@ -23,7 +24,7 @@ open build/Siaheh.app
 ```
 
 The app has no window and no Dock icon — only a paperclip in the menu bar. Right-click it and choose
-**Quit**, or stop it from the shell:
+**Settings** or **Quit**, or stop it from the shell:
 
 ```sh
 pkill -f Siaheh.app
