@@ -13,6 +13,11 @@ final class HistoryWindowController: NSWindowController {
     private let emptyLabel = NSTextField(labelWithString: "No clips yet — copy something first")
     private var clips: [Clip] = []
 
+    /// The app that was frontmost before this window opened. A menu-bar agent keeps
+    /// activation when its window closes, so focus has to be handed back explicitly or
+    /// the next ⌘V goes nowhere.
+    private var previousApp: NSRunningApplication?
+
     init(store: ClipStore) {
         self.store = store
         super.init(window: NSWindow(
@@ -25,6 +30,7 @@ final class HistoryWindowController: NSWindowController {
         window?.isReleasedWhenClosed = false
         window?.center()
         window?.contentView = makeContentView()
+        window?.delegate = self
     }
 
     required init?(coder: NSCoder) {
@@ -32,6 +38,12 @@ final class HistoryWindowController: NSWindowController {
     }
 
     func present() {
+        // Remember who had focus before we steal it, so it can be given back on close.
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        if frontmost?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+            previousApp = frontmost
+        }
+
         clips = store.recent(limit: Self.displayLimit)
         tableView.reloadData()
         emptyLabel.isHidden = !clips.isEmpty
@@ -159,6 +171,20 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
             ))
         }
         return description
+    }
+}
+
+extension HistoryWindowController: NSWindowDelegate {
+    /// Every close path lands here — Return, click, Escape, or the title-bar button.
+    func windowWillClose(_ notification: Notification) {
+        guard let app = previousApp else { return }
+        previousApp = nil
+
+        // Hand activation back once the window is actually gone, so the user's next
+        // keystroke (⌘V) goes to the app they were working in.
+        DispatchQueue.main.async {
+            app.activate()
+        }
     }
 }
 
