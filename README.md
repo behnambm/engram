@@ -6,7 +6,8 @@ instant as history grows**. Currently: research + a working app shell.
 | File | What it is |
 |---|---|
 | `Sources/Siaheh/main.swift` | The app: a paperclip in the menu bar. Right-click it for **Settings** and **Quit**. |
-| `Sources/Siaheh/SettingsWindow.swift` | The Settings window (empty placeholder for now), created once and reused. |
+| `Sources/Siaheh/SettingsWindow.swift` | The Settings window, created once and reused. Holds the launch-at-login checkbox. |
+| `Sources/Siaheh/LaunchAtLogin.swift` | Login-item state via `SMAppService` (the system owns it, not UserDefaults). |
 | `Package.swift` | Swift package (Swift 6, macOS 14+). No dependencies. |
 | `Support/Info.plist` | Bundle metadata. `LSUIElement` = no Dock icon, no app switcher entry. |
 | `scripts/build-app.sh` | Builds the package and assembles `build/Siaheh.app` (a bundle is required for `LSUIElement`). |

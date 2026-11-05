@@ -4,6 +4,12 @@ import AppKit
 /// only hides it, so the app keeps running in the menu bar.
 @MainActor
 final class SettingsWindowController: NSWindowController {
+    private let launchAtLoginButton = NSButton(
+        checkboxWithTitle: "Start Siaheh at system startup",
+        target: nil,
+        action: nil
+    )
+
     convenience init() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 260),
@@ -14,11 +20,14 @@ final class SettingsWindowController: NSWindowController {
         window.title = "Settings"
         window.isReleasedWhenClosed = false
         window.center()
-        window.contentView = Self.placeholderView()
         self.init(window: window)
+        window.contentView = makeContentView()
+        refreshLaunchAtLogin()
     }
 
     func present() {
+        refreshLaunchAtLogin()
+
         // A background agent is not active, and macOS refuses focus requests that do
         // not follow user input. Ask for activation, make it key when we get it, and
         // order it above other apps regardless so it is never hidden behind them.
@@ -27,16 +36,40 @@ final class SettingsWindowController: NSWindowController {
         window?.orderFrontRegardless()
     }
 
-    private static func placeholderView() -> NSView {
+    private func makeContentView() -> NSView {
+        launchAtLoginButton.target = self
+        launchAtLoginButton.action = #selector(toggleLaunchAtLogin)
+        launchAtLoginButton.translatesAutoresizingMaskIntoConstraints = false
+
         let container = NSView()
-        let label = NSTextField(labelWithString: "Settings")
-        label.textColor = .secondaryLabelColor
-        label.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(label)
+        container.addSubview(launchAtLoginButton)
         NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            launchAtLoginButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            launchAtLoginButton.topAnchor.constraint(equalTo: container.topAnchor, constant: 20),
+            launchAtLoginButton.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor,
+                                                          constant: -20),
         ])
         return container
+    }
+
+    /// Reads the state back from the system, which is the only source of truth: the
+    /// user can remove the login item in System Settings while this window is open.
+    private func refreshLaunchAtLogin() {
+        launchAtLoginButton.state = LaunchAtLogin.isOn ? .on : .off
+        launchAtLoginButton.toolTip = LaunchAtLogin.needsApproval
+            ? "Allow Siaheh in System Settings → General → Login Items"
+            : nil
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        do {
+            try LaunchAtLogin.set(launchAtLoginButton.state == .on)
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Could not change the login item"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+        }
+        refreshLaunchAtLogin()
     }
 }
