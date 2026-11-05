@@ -1,18 +1,35 @@
 import AppKit
 
-/// Minimal menu-bar shell: a paperclip in the status bar, with a right-click menu.
-/// No window, no menu-bar left-click behaviour, no Dock icon.
+/// Menu-bar agent: a paperclip in the status bar, a global shortcut that opens the
+/// clipboard history, and the history recorder behind both.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
-    private lazy var settingsWindow = SettingsWindowController()
+    private var store: ClipStore?
+    private var watcher: ClipboardWatcher?
+    private var historyWindow: HistoryWindowController?
+    private var settingsWindow: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installStatusItem()
+        openStore()
+        registerHotKey()
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(registerHotKey),
+            name: .hotKeyDidChange,
+            object: nil
+        )
+    }
+
+    // MARK: - Status item
+
+    private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = item.button {
-            let icon = NSImage(systemSymbolName: "paperclip",
-                               accessibilityDescription: "Clipboard")
+            let icon = NSImage(systemSymbolName: "paperclip", accessibilityDescription: "Clipboard")
             icon?.isTemplate = true
             button.image = icon
             button.toolTip = "Siaheh"
@@ -34,6 +51,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
 
+        let clipboard = NSMenuItem(title: "Clipboard History", action: #selector(showHistory), keyEquivalent: "")
+        clipboard.target = self
+        menu.addItem(clipboard)
+
         let settings = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -47,8 +68,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
 
+    // MARK: - Clipboard history
+
+    /// A history that cannot be opened is fatal for a clipboard manager: say so and stop
+    /// rather than run in a state where nothing is recorded.
+    private func openStore() {
+        do {
+            let store = try ClipStore()
+            store.enforceRetention()
+
+            let watcher = ClipboardWatcher(store: store)
+            watcher.start()
+
+            self.store = store
+            self.watcher = watcher
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Siaheh could not open its clipboard history"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+            NSApp.terminate(nil)
+        }
+    }
+
+    @objc private func registerHotKey() {
+        let combo = Settings.hotKey
+        let registered = GlobalHotKey.shared.register(combo) { [weak self] in
+            self?.showHistory()
+        }
+
+        if !registered {
+            NSLog("Siaheh: \(combo.displayString) is already taken; pick another shortcut in Settings")
+        }
+    }
+
+    @objc private func showHistory() {
+        guard let store else { return }
+
+        if historyWindow == nil {
+            historyWindow = HistoryWindowController(store: store)
+        }
+        historyWindow?.present()
+    }
+
     @objc private func openSettings() {
-        settingsWindow.present()
+        guard let store else { return }
+
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindowController(store: store)
+        }
+        settingsWindow?.present()
     }
 
     @objc private func quit() {
