@@ -1,14 +1,15 @@
 import AppKit
 
-/// The clipboard history window: centered, keyboard driven, and it closes as soon as
-/// a clip has been copied.
+/// The clipboard history window: centered, searchable, keyboard driven, and it closes as
+/// soon as a clip has been copied.
 @MainActor
 final class HistoryWindowController: NSWindowController {
-    /// Only the newest page is ever loaded, so opening the window stays ~1 ms no matter
-    /// how large the history is.
+    /// Only one page is ever loaded, so opening and filtering stay ~1 ms no matter how
+    /// large the history is.
     private static let displayLimit = 200
 
     private let store: ClipStore
+    private let searchField = HistorySearchField()
     private let tableView = HistoryTableView()
     private let emptyLabel = NSTextField(labelWithString: "No clips yet — copy something first")
     private var clips: [Clip] = []
@@ -21,7 +22,7 @@ final class HistoryWindowController: NSWindowController {
     init(store: ClipStore) {
         self.store = store
         super.init(window: NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 460),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
@@ -44,20 +45,8 @@ final class HistoryWindowController: NSWindowController {
             previousApp = frontmost
         }
 
-        clips = store.recent(limit: Self.displayLimit)
-        tableView.reloadData()
-        emptyLabel.isHidden = !clips.isEmpty
-
-        // The count in the title separates "recording nothing" from "rendering nothing".
-        let total = store.count
-        window?.title = total == 0
-            ? "Clipboard History — nothing recorded yet"
-            : "Clipboard History — \(total) clip\(total == 1 ? "" : "s")"
-
-        if !clips.isEmpty {
-            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
-            tableView.scrollRowToVisible(0)
-        }
+        searchField.stringValue = ""
+        reload()
 
         window?.center()
 
@@ -67,10 +56,20 @@ final class HistoryWindowController: NSWindowController {
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
-        window?.makeFirstResponder(tableView)
+
+        // Typing is the first thing the user does here, so the search field takes focus
+        // instead of the list.
+        window?.makeFirstResponder(searchField)
     }
 
     private func makeContentView() -> NSView {
+        searchField.placeholderString = "Search history"
+        searchField.delegate = self
+        searchField.onMoveSelection = { [weak self] delta in self?.moveSelection(by: delta) }
+        searchField.onActivate = { [weak self] in self?.copySelected() }
+        searchField.onCancel = { [weak self] in self?.window?.close() }
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+
         tableView.headerView = nil
         tableView.rowHeight = 30
         tableView.allowsMultipleSelection = false
@@ -91,24 +90,77 @@ final class HistoryWindowController: NSWindowController {
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let container = NSView()
+        container.addSubview(searchField)
         container.addSubview(scrollView)
         container.addSubview(emptyLabel)
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: container.topAnchor),
+            searchField.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            searchField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            searchField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+
+            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 10),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            emptyLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            emptyLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+
+            emptyLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
+            emptyLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
         ])
         return container
     }
+
+    // MARK: - Filtering
+
+    private func reload() {
+        let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        clips = store.search(query, limit: Self.displayLimit)
+
+        tableView.reloadData()
+        if !clips.isEmpty {
+            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+            tableView.scrollRowToVisible(0)
+        }
+
+        emptyLabel.isHidden = !clips.isEmpty
+        if clips.isEmpty {
+            emptyLabel.stringValue = query.isEmpty
+                ? "No clips yet — copy something first"
+                : "No matches"
+        }
+
+        updateTitle(query: query)
+    }
+
+    /// The count in the title separates "recording nothing" from "rendering nothing".
+    private func updateTitle(query: String) {
+        if query.isEmpty {
+            let total = store.count
+            window?.title = total == 0
+                ? "Clipboard History — nothing recorded yet"
+                : "Clipboard History — \(total) clip\(total == 1 ? "" : "s")"
+        } else {
+            window?.title = clips.isEmpty
+                ? "Clipboard History — no matches"
+                : "Clipboard History — \(clips.count) match\(clips.count == 1 ? "" : "es")"
+        }
+    }
+
+    private func moveSelection(by delta: Int) {
+        guard !clips.isEmpty else { return }
+        let current = tableView.selectedRow < 0 ? 0 : tableView.selectedRow
+        let next = min(max(current + delta, 0), clips.count - 1)
+        tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
+        tableView.scrollRowToVisible(next)
+    }
+
+    // MARK: - Copying
 
     @objc private func rowClicked() {
         let row = tableView.clickedRow
@@ -127,6 +179,12 @@ final class HistoryWindowController: NSWindowController {
         pasteboard.clearContents()
         pasteboard.setString(clip.text, forType: .string)
         window?.close()
+    }
+}
+
+extension HistoryWindowController: NSSearchFieldDelegate {
+    func controlTextDidChange(_ notification: Notification) {
+        reload()
     }
 }
 
@@ -184,6 +242,25 @@ extension HistoryWindowController: NSWindowDelegate {
         // keystroke (⌘V) goes to the app they were working in.
         DispatchQueue.main.async {
             app.activate()
+        }
+    }
+}
+
+/// Search field that keeps the list keyboard-usable: typing filters, and the arrow keys
+/// and Return belong to the list rather than to the text editor.
+@MainActor
+private final class HistorySearchField: NSSearchField {
+    var onMoveSelection: ((Int) -> Void)?
+    var onActivate: (() -> Void)?
+    var onCancel: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 125: onMoveSelection?(1)   // ↓
+        case 126: onMoveSelection?(-1)  // ↑
+        case 36, 76: onActivate?()      // Return, keypad Enter
+        case 53: onCancel?()            // Escape
+        default: super.keyDown(with: event)
         }
     }
 }

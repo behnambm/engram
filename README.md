@@ -7,10 +7,12 @@ instant as history grows**.
 
 1. Copy things as usual — text clips are recorded automatically.
 2. Press **⌥⌘V** (the global shortcut) to open the history window in the centre of the screen.
-3. Move with **↑ ↓**, then **Enter** to copy the selected clip and close the window — or just click a
+3. **Start typing** to search the entire history as you type; the list filters immediately. Without a
+   query it shows the newest clips.
+4. Move with **↑ ↓**, then **Enter** to copy the selected clip and close the window — or just click a
    clip to copy it and close.
-4. **Esc** closes without copying.
-5. Right-click the paperclip for **Clipboard History**, **Settings** and **Quit**.
+5. **Esc** closes without copying.
+6. Right-click the paperclip for **Clipboard History**, **Settings** and **Quit**.
 
 Settings holds the history retention limit (default **No limit**), the shortcut recorder, and
 start-at-login.
@@ -18,7 +20,7 @@ start-at-login.
 | File | What it is |
 |---|---|
 | `Sources/Siaheh/main.swift` | Menu-bar agent: status item, menu, and wiring of store/watcher/hotkey/windows. |
-| `Sources/Siaheh/ClipStore.swift` | SQLite history. `id` is the rowid, so newest-first is `ORDER BY id DESC` — no sort, no timestamp index. |
+| `Sources/Siaheh/ClipStore.swift` | SQLite history plus an FTS5 index over the text. `id` is the rowid, so newest-first is `ORDER BY id DESC` / `ORDER BY f.rowid DESC` — no sort, no timestamp index, no `rank`. |
 | `Sources/Siaheh/ClipboardWatcher.swift` | Polls `changeCount` every 500 ms; skips concealed/transient/password-manager pasteboard types. |
 | `Sources/Siaheh/HistoryWindow.swift` | The centered list window: arrows, Return, click-to-copy, closes on copy. |
 | `Sources/Siaheh/HotKey.swift` | Carbon `RegisterEventHotKey` — a global shortcut with no Accessibility permission. |
@@ -48,11 +50,18 @@ behaviour depends on the bundle: `LSUIElement`, the login item, and the app's TC
 History lives at `~/Library/Application Support/Siaheh/history.sqlite` (WAL mode). Delete the folder
 to reset it.
 
+## How search works
+
+Word-prefix queries go through FTS5 (`ORDER BY f.rowid DESC`, never `rank`), so typing stays
+sub-millisecond as history grows. A mid-word query has no FTS tokens, so it falls back to a substring
+scan — correct rather than fast, and only paid when the fast path finds nothing. Query text is split on
+non-alphanumerics and quoted, so `col:val`, `(`, and `AND` are searched literally instead of raising an
+FTS syntax error.
+
 ## Not built yet
 
-Search, filtering by source app or content type, pinning/snippets, plain-text paste, images, and
-auto-paste. Also: no pause-recording toggle, and the "no limit" retention means the database grows
-until you pick a limit.
+Filtering by source app or content type, pinning/snippets, plain-text paste, images, auto-paste, and a
+pause-recording toggle. The "no limit" retention means the database grows until you pick a limit.
 
 ## Research verdict, in one line
 
