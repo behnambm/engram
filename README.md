@@ -29,7 +29,9 @@ start-at-login.
 | `Sources/Siaheh/LaunchAtLogin.swift` | Login-item state via `SMAppService`. |
 | `Package.swift` | Swift package (Swift 6, macOS 14+). No dependencies; uses the system SQLite. |
 | `Support/Info.plist` | Bundle metadata. `LSUIElement` = no Dock icon, no app switcher entry. |
+| `Support/AppIcon.icns` | The app icon (white paperclip on an indigo gradient). Regenerate with `scripts/make-icon.sh`. |
 | `scripts/build-app.sh` | Builds the package and assembles `build/Siaheh.app` (a bundle is required for `LSUIElement`). |
+| `scripts/make-icon.swift` / `make-icon.sh` | Draw and render the app icon to `AppIcon.icns` (SF Symbol + `iconutil`). |
 | `docs/clipboard-manager-research.md` | The decision document: market, platform constraints, measured benchmarks, architecture, feature spec, build plan. **Start here.** |
 | `docs/storage-research.md` | Storage/search appendix: validated DDL, every FTS5 failure mode reproduced, library comparison. |
 | `docs/market-teardown.md` | Product-by-product teardown with evidence tags (verified / unverified). |
