@@ -42,8 +42,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleClick() {
-        guard NSApp.currentEvent?.type == .rightMouseUp else { return }
-        showMenu()
+        // Left-click opens the history; right-click keeps the Settings/Quit menu.
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            showMenu()
+        } else {
+            showHistory()
+        }
     }
 
     private func showMenu() {
