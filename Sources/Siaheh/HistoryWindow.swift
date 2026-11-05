@@ -220,15 +220,36 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
         label.lineBreakMode = .byTruncatingTail
         label.toolTip = clip.text
         label.translatesAutoresizingMaskIntoConstraints = false
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let time = NSTextField(
+            labelWithString: Self.relativeFormatter.localizedString(for: clip.createdAt, relativeTo: Date())
+        )
+        time.font = .systemFont(ofSize: 11)
+        time.textColor = .tertiaryLabelColor
+        time.translatesAutoresizingMaskIntoConstraints = false
+        time.setContentHuggingPriority(.required, for: .horizontal)
+        time.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         cell.addSubview(label)
+        cell.addSubview(time)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
-            label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
             label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+
+            time.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 8),
+            time.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
+            time.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
         return cell
     }
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        formatter.dateTimeStyle = .numeric
+        return formatter
+    }()
 
     private static func describe(_ clip: Clip) -> NSAttributedString {
         let description = NSMutableAttributedString(
