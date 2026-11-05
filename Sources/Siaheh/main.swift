@@ -1,6 +1,6 @@
 import AppKit
 
-/// Minimal menu-bar shell: a clipboard icon in the status bar and nothing else.
+/// Minimal menu-bar shell: a paperclip in the status bar and nothing else.
 /// No window, no menu, no Dock icon.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -10,7 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = item.button {
-            let icon = NSImage(systemSymbolName: "doc.on.clipboard",
+            let icon = NSImage(systemSymbolName: "paperclip",
                                accessibilityDescription: "Clipboard")
             icon?.isTemplate = true
             button.image = icon
