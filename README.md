@@ -5,7 +5,7 @@ instant as history grows**. Currently: research + a working app shell.
 
 | File | What it is |
 |---|---|
-| `Sources/Siaheh/main.swift` | The app: a paperclip in the menu bar. That is all it does today. |
+| `Sources/Siaheh/main.swift` | The app: a paperclip in the menu bar. Right-click it for a menu with **Quit**. |
 | `Package.swift` | Swift package (Swift 6, macOS 14+). No dependencies. |
 | `Support/Info.plist` | Bundle metadata. `LSUIElement` = no Dock icon, no app switcher entry. |
 | `scripts/build-app.sh` | Builds the package and assembles `build/Siaheh.app` (a bundle is required for `LSUIElement`). |
@@ -22,7 +22,8 @@ instant as history grows**. Currently: research + a working app shell.
 open build/Siaheh.app
 ```
 
-The app has no window, no menu and no Dock icon — only a paperclip icon in the menu bar. To stop it:
+The app has no window and no Dock icon — only a paperclip in the menu bar. Right-click it and choose
+**Quit**, or stop it from the shell:
 
 ```sh
 pkill -f Siaheh.app
