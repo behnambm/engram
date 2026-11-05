@@ -36,6 +36,12 @@ final class HistoryWindowController: NSWindowController {
         tableView.reloadData()
         emptyLabel.isHidden = !clips.isEmpty
 
+        // The count in the title separates "recording nothing" from "rendering nothing".
+        let total = store.count
+        window?.title = total == 0
+            ? "Clipboard History — nothing recorded yet"
+            : "Clipboard History — \(total) clip\(total == 1 ? "" : "s")"
+
         if !clips.isEmpty {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
             tableView.scrollRowToVisible(0)
