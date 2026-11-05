@@ -9,7 +9,7 @@ final class HistoryWindowController: NSWindowController {
     private static let displayLimit = 200
 
     private let store: ClipStore
-    private let searchField = HistorySearchField()
+    private let searchField = NSSearchField()
     private let tableView = HistoryTableView()
     private let emptyLabel = NSTextField(labelWithString: "No clips yet — copy something first")
     private var clips: [Clip] = []
@@ -65,9 +65,6 @@ final class HistoryWindowController: NSWindowController {
     private func makeContentView() -> NSView {
         searchField.placeholderString = "Search history"
         searchField.delegate = self
-        searchField.onMoveSelection = { [weak self] delta in self?.moveSelection(by: delta) }
-        searchField.onActivate = { [weak self] in self?.copySelected() }
-        searchField.onCancel = { [weak self] in self?.window?.close() }
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
         tableView.headerView = nil
@@ -186,6 +183,28 @@ extension HistoryWindowController: NSSearchFieldDelegate {
     func controlTextDidChange(_ notification: Notification) {
         reload()
     }
+
+    /// The search field is edited by a field editor, so its keys never reach `keyDown`.
+    /// This is the AppKit hook that catches navigation commands before the editor handles
+    /// them — arrow keys move the list, Return copies, Escape closes.
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        switch commandSelector {
+        case #selector(NSResponder.moveDown(_:)):
+            moveSelection(by: 1)
+            return true
+        case #selector(NSResponder.moveUp(_:)):
+            moveSelection(by: -1)
+            return true
+        case #selector(NSResponder.insertNewline(_:)):
+            copySelected()
+            return true
+        case #selector(NSResponder.cancelOperation(_:)):
+            window?.close()
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
@@ -242,25 +261,6 @@ extension HistoryWindowController: NSWindowDelegate {
         // keystroke (⌘V) goes to the app they were working in.
         DispatchQueue.main.async {
             app.activate()
-        }
-    }
-}
-
-/// Search field that keeps the list keyboard-usable: typing filters, and the arrow keys
-/// and Return belong to the list rather than to the text editor.
-@MainActor
-private final class HistorySearchField: NSSearchField {
-    var onMoveSelection: ((Int) -> Void)?
-    var onActivate: (() -> Void)?
-    var onCancel: (() -> Void)?
-
-    override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 125: onMoveSelection?(1)   // ↓
-        case 126: onMoveSelection?(-1)  // ↑
-        case 36, 76: onActivate?()      // Return, keypad Enter
-        case 53: onCancel?()            // Escape
-        default: super.keyDown(with: event)
         }
     }
 }
