@@ -1,5 +1,13 @@
 # engram
 
+<p align="center">
+  <img src="Support/AppIcon-1024.png" alt="Engram" width="128" height="128">
+</p>
+
+<p align="center">
+  <a href="https://behnambm.github.io/engram/">behnambm.github.io/engram</a>
+</p>
+
 A macOS clipboard manager: a CopyClip-class menu-bar app with **search and filtering that stays
 instant as history grows**.
 
