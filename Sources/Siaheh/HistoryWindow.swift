@@ -68,7 +68,7 @@ final class HistoryWindowController: NSWindowController {
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
         tableView.headerView = nil
-        tableView.rowHeight = 30
+        tableView.rowHeight = 46
         tableView.allowsMultipleSelection = false
         tableView.allowsEmptySelection = true
         tableView.usesAlternatingRowBackgroundColors = false
@@ -217,7 +217,9 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
         let cell = NSTableCellView()
 
         let label = NSTextField(labelWithAttributedString: Self.describe(clip))
-        label.lineBreakMode = .byTruncatingTail
+        label.lineBreakMode = .byWordWrapping
+        label.usesSingleLineMode = false
+        label.maximumNumberOfLines = 2
         label.toolTip = clip.text
         label.translatesAutoresizingMaskIntoConstraints = false
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -236,8 +238,10 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
             label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            label.topAnchor.constraint(greaterThanOrEqualTo: cell.topAnchor, constant: 6),
+            label.bottomAnchor.constraint(lessThanOrEqualTo: cell.bottomAnchor, constant: -6),
 
-            time.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 8),
+            time.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 12),
             time.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
             time.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
@@ -255,7 +259,7 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
         let description = NSMutableAttributedString(
             string: clip.preview,
             attributes: [
-                .font: NSFont.systemFont(ofSize: 12),
+                .font: NSFont.systemFont(ofSize: 13),
                 .foregroundColor: NSColor.labelColor,
             ]
         )
@@ -263,7 +267,7 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
             description.append(NSAttributedString(
                 string: "  ·  \(appName)",
                 attributes: [
-                    .font: NSFont.systemFont(ofSize: 11),
+                    .font: NSFont.systemFont(ofSize: 12),
                     .foregroundColor: NSColor.secondaryLabelColor,
                 ]
             ))

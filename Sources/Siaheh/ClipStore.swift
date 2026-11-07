@@ -8,9 +8,12 @@ struct Clip: Identifiable {
     let appName: String?
     let createdAt: Date
 
-    /// One line for the list: newlines and runs of whitespace collapsed.
+    /// A short version for the list: newlines and runs of whitespace collapsed, and
+    /// capped so one long clip cannot become a wall of text in a single row. The cell
+    /// truncates to two lines; the full text is always in `text` (and the row's tooltip).
     var preview: String {
-        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let singleLine = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return singleLine.count > 240 ? String(singleLine.prefix(240)) : singleLine
     }
 }
 
