@@ -26,22 +26,14 @@ jobs:
           source .venv/bin/activate
           ./scripts/make-dmg.sh
 
-      - name: Publish to landing page
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}-${{ env.BUILD }}
+          name: Engram ${{ env.VERSION }}
+          files: dist/Engram.dmg
         env:
-          PAGES_TOKEN: ${{ secrets.PAGES_TOKEN }}
-        run: |
-          set -euo pipefail
-          PAGES="https://x-access-token:${PAGES_TOKEN}@github.com/behnambm/behnambm.github.io.git"
-          git clone --quiet "$PAGES" pages
-          cd pages
-          mkdir -p engram/downloads
-          cp ../dist/Engram.dmg "engram/downloads/Engram-${VERSION}-${BUILD}.dmg"
-          cp ../dist/Engram.dmg engram/Engram.dmg
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add engram
-          git commit -m "chore(engram): publish ${VERSION}-${BUILD}" || echo "nothing to commit"
-          git push
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4

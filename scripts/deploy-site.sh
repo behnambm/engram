@@ -13,7 +13,6 @@ mkdir -p "$WORK/engram"
 
 cp "$ROOT/site/index.html" "$WORK/engram/index.html"
 cp "$ROOT/Support/AppIcon-1024.png" "$WORK/engram/icon.png"
-[ -f "$ROOT/dist/Engram.dmg" ] && cp "$ROOT/dist/Engram.dmg" "$WORK/engram/Engram.dmg"
 
 git -C "$WORK" add engram
 if git -C "$WORK" diff --cached --quiet; then
