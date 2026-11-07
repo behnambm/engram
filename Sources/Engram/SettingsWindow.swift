@@ -5,11 +5,7 @@ import AppKit
 @MainActor
 final class SettingsWindowController: NSWindowController {
     private let store: ClipStore
-    private let launchAtLoginButton = NSButton(
-        checkboxWithTitle: "Start Engram at system startup",
-        target: nil,
-        action: nil
-    )
+    private let launchAtLoginSwitch = NSSwitch()
     private let retentionPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let hotKeyButton = ShortcutRecorderButton()
 
@@ -26,12 +22,17 @@ final class SettingsWindowController: NSWindowController {
     init(store: ClipStore) {
         self.store = store
         super.init(window: NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 240),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 280),
+            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         ))
         window?.title = "Settings"
+        window?.titlebarAppearsTransparent = true
+        window?.titleVisibility = .hidden
+        window?.isMovableByWindowBackground = true
+        window?.backgroundColor = .clear
+        window?.isOpaque = false
         window?.isReleasedWhenClosed = false
         window?.center()
         window?.contentView = makeContentView()
@@ -54,8 +55,19 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private func makeContentView() -> NSView {
-        launchAtLoginButton.target = self
-        launchAtLoginButton.action = #selector(toggleLaunchAtLogin)
+        let root = NSView()
+
+        // The same translucent material as the history window, so Settings reads as the
+        // same surface rather than a separate opaque dialog.
+        let material = NSVisualEffectView()
+        material.material = .popover
+        material.blendingMode = .behindWindow
+        material.state = .active
+        material.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(material)
+
+        launchAtLoginSwitch.target = self
+        launchAtLoginSwitch.action = #selector(toggleLaunchAtLogin)
 
         retentionPopup.addItems(withTitles: Self.retentionChoices.map(\.title))
         retentionPopup.target = self
@@ -66,47 +78,71 @@ final class SettingsWindowController: NSWindowController {
             self?.refreshControls()
         }
 
-        let separator = NSBox()
-        separator.boxType = .separator
+        let heading = NSTextField(labelWithString: "Settings")
+        heading.font = .systemFont(ofSize: 20, weight: .semibold)
+        heading.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = NSStackView(views: [
-            launchAtLoginButton,
-            separator,
-            row(title: "History retention:", control: retentionPopup),
-            row(title: "Open history:", control: hotKeyButton),
-        ])
+        // Rows are grouped like System Settings: a left-aligned label, a right-aligned
+        // control, and a hairline between rows.
+        let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 14
-
-        let container = NSView()
+        stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(stack)
+
+        addFormRow(to: stack, title: "Start at login", control: launchAtLoginSwitch)
+        addDivider(to: stack)
+        addFormRow(to: stack, title: "History retention", control: retentionPopup)
+        addDivider(to: stack)
+        addFormRow(to: stack, title: "Open history", control: hotKeyButton)
+
+        root.addSubview(heading)
+        root.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 20),
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            separator.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            material.topAnchor.constraint(equalTo: root.topAnchor),
+            material.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            material.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            material.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+
+            heading.topAnchor.constraint(equalTo: root.topAnchor, constant: 44),
+            heading.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+
+            stack.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
         ])
-        return container
+        return root
     }
 
-    private func row(title: String, control: NSView) -> NSView {
+    private func addFormRow(to stack: NSStackView, title: String, control: NSView) {
         let label = NSTextField(labelWithString: title)
-        label.alignment = .right
-        label.widthAnchor.constraint(equalToConstant: 130).isActive = true
+        label.font = .systemFont(ofSize: 13)
 
-        let stack = NSStackView(views: [label, control])
-        stack.orientation = .horizontal
-        stack.spacing = 8
-        return stack
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let row = NSStackView(views: [label, spacer, control])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 12
+
+        stack.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    }
+
+    private func addDivider(to stack: NSStackView) {
+        let divider = NSBox()
+        divider.boxType = .separator
+        stack.addArrangedSubview(divider)
+        divider.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
     /// Everything is read back from its source of truth: the system for the login item,
     /// `UserDefaults` for the rest. Nothing is cached in the window.
     private func refreshControls() {
-        launchAtLoginButton.state = LaunchAtLogin.isOn ? .on : .off
-        launchAtLoginButton.toolTip = LaunchAtLogin.needsApproval
+        launchAtLoginSwitch.state = LaunchAtLogin.isOn ? .on : .off
+        launchAtLoginSwitch.toolTip = LaunchAtLogin.needsApproval
             ? "Allow Engram in System Settings → General → Login Items"
             : nil
 
@@ -119,7 +155,7 @@ final class SettingsWindowController: NSWindowController {
 
     @objc private func toggleLaunchAtLogin() {
         do {
-            try LaunchAtLogin.set(launchAtLoginButton.state == .on)
+            try LaunchAtLogin.set(launchAtLoginSwitch.state == .on)
         } catch {
             presentError("Could not change the login item", error)
         }

@@ -8,10 +8,15 @@ final class HistoryWindowController: NSWindowController {
     /// large the history is.
     private static let displayLimit = 200
 
+    /// Inset from the top of the window that clears the traffic-light buttons under a
+    /// transparent titlebar (the content extends up into the titlebar area).
+    private static let titleBarInset: CGFloat = 44
+
     private let store: ClipStore
     private let searchField = NSSearchField()
     private let tableView = HistoryTableView()
     private let emptyLabel = NSTextField(labelWithString: "No clips yet — copy something first")
+    private let statusLabel = NSTextField(labelWithString: "")
     private var clips: [Clip] = []
 
     /// The app that was frontmost before this window opened. A menu-bar agent keeps
@@ -22,12 +27,17 @@ final class HistoryWindowController: NSWindowController {
     init(store: ClipStore) {
         self.store = store
         super.init(window: NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 460),
-            styleMask: [.titled, .closable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 480),
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         ))
         window?.title = "Clipboard History"
+        window?.titlebarAppearsTransparent = true
+        window?.titleVisibility = .hidden
+        window?.isMovableByWindowBackground = true
+        window?.backgroundColor = .clear
+        window?.isOpaque = false
         window?.isReleasedWhenClosed = false
         window?.center()
         window?.contentView = makeContentView()
@@ -63,7 +73,19 @@ final class HistoryWindowController: NSWindowController {
     }
 
     private func makeContentView() -> NSView {
+        let root = NSView()
+
+        // Translucent, content-area material that lets the desktop show through — the
+        // frosted-glass chrome System Settings and Notes use for their surfaces.
+        let material = NSVisualEffectView()
+        material.material = .popover
+        material.blendingMode = .behindWindow
+        material.state = .active
+        material.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(material)
+
         searchField.placeholderString = "Search history"
+        searchField.controlSize = .large
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
@@ -72,6 +94,9 @@ final class HistoryWindowController: NSWindowController {
         tableView.allowsMultipleSelection = false
         tableView.allowsEmptySelection = true
         tableView.usesAlternatingRowBackgroundColors = false
+        tableView.backgroundColor = .clear
+        tableView.gridStyleMask = .solidHorizontalGridLineMask
+        tableView.gridColor = .separatorColor
         tableView.target = self
         tableView.action = #selector(rowClicked)
         tableView.onActivate = { [weak self] in self?.copySelected() }
@@ -91,26 +116,50 @@ final class HistoryWindowController: NSWindowController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
         emptyLabel.textColor = .secondaryLabelColor
+        emptyLabel.font = .systemFont(ofSize: 13)
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        let container = NSView()
-        container.addSubview(searchField)
-        container.addSubview(scrollView)
-        container.addSubview(emptyLabel)
-        NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            searchField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            searchField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+        statusLabel.font = .systemFont(ofSize: 11)
+        statusLabel.textColor = .tertiaryLabelColor
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
-            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 10),
-            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        let divider = NSBox()
+        divider.boxType = .separator
+        divider.translatesAutoresizingMaskIntoConstraints = false
+
+        root.addSubview(searchField)
+        root.addSubview(divider)
+        root.addSubview(scrollView)
+        root.addSubview(statusLabel)
+        root.addSubview(emptyLabel)
+
+        NSLayoutConstraint.activate([
+            material.topAnchor.constraint(equalTo: root.topAnchor),
+            material.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            material.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            material.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+
+            searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: Self.titleBarInset),
+            searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
+            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+
+            divider.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 12),
+            divider.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+
+            scrollView.topAnchor.constraint(equalTo: divider.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -24),
+
+            statusLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -16),
+            statusLabel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -8),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
         ])
-        return container
+        return root
     }
 
     // MARK: - Filtering
@@ -132,21 +181,24 @@ final class HistoryWindowController: NSWindowController {
                 : "No matches"
         }
 
-        updateTitle(query: query)
+        updateStatus(query: query)
     }
 
-    /// The count in the title separates "recording nothing" from "rendering nothing".
-    private func updateTitle(query: String) {
+    /// The window chrome is transparent now, so the clip count lives in a quiet status
+    /// line at the bottom instead of a title — it reads as a status bar, not a header.
+    private func updateStatus(query: String) {
+        guard !clips.isEmpty else {
+            statusLabel.isHidden = true
+            return
+        }
+
         if query.isEmpty {
             let total = store.count
-            window?.title = total == 0
-                ? "Clipboard History — nothing recorded yet"
-                : "Clipboard History — \(total) clip\(total == 1 ? "" : "s")"
+            statusLabel.stringValue = "\(total) clip\(total == 1 ? "" : "s")"
         } else {
-            window?.title = clips.isEmpty
-                ? "Clipboard History — no matches"
-                : "Clipboard History — \(clips.count) match\(clips.count == 1 ? "" : "es")"
+            statusLabel.stringValue = "\(clips.count) match\(clips.count == 1 ? "" : "es")"
         }
+        statusLabel.isHidden = false
     }
 
     private func moveSelection(by delta: Int) {
@@ -213,66 +265,11 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let clip = clips[row]
-        let cell = NSTableCellView()
-
-        let label = NSTextField(labelWithAttributedString: Self.describe(clip))
-        label.lineBreakMode = .byWordWrapping
-        label.usesSingleLineMode = false
-        label.maximumNumberOfLines = 2
-        label.toolTip = clip.text
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let time = NSTextField(
-            labelWithString: Self.relativeFormatter.localizedString(for: clip.createdAt, relativeTo: Date())
-        )
-        time.font = .systemFont(ofSize: 11)
-        time.textColor = .tertiaryLabelColor
-        time.translatesAutoresizingMaskIntoConstraints = false
-        time.setContentHuggingPriority(.required, for: .horizontal)
-        time.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        cell.addSubview(label)
-        cell.addSubview(time)
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
-            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            label.topAnchor.constraint(greaterThanOrEqualTo: cell.topAnchor, constant: 6),
-            label.bottomAnchor.constraint(lessThanOrEqualTo: cell.bottomAnchor, constant: -6),
-
-            time.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 12),
-            time.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
-            time.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-        ])
-        return cell
+        HistoryCellView(clip: clips[row])
     }
 
-    private static let relativeFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        formatter.dateTimeStyle = .numeric
-        return formatter
-    }()
-
-    private static func describe(_ clip: Clip) -> NSAttributedString {
-        let description = NSMutableAttributedString(
-            string: clip.preview,
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 13),
-                .foregroundColor: NSColor.labelColor,
-            ]
-        )
-        if let appName = clip.appName {
-            description.append(NSAttributedString(
-                string: "  ·  \(appName)",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 12),
-                    .foregroundColor: NSColor.secondaryLabelColor,
-                ]
-            ))
-        }
-        return description
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        HistoryRowView()
     }
 }
 
@@ -305,5 +302,108 @@ private final class HistoryTableView: NSTableView {
         default:
             super.keyDown(with: event)
         }
+    }
+}
+
+/// A selected row drawn as a rounded, accent-tinted pill instead of a full-width
+/// square — the selection style Spotlight and System Settings use for their lists.
+@MainActor
+private final class HistoryRowView: NSTableRowView {
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard selectionHighlightStyle != .none else { return }
+        let color = isEmphasized
+            ? NSColor.selectedContentBackgroundColor
+            : NSColor.unemphasizedSelectedContentBackgroundColor
+        color.setFill()
+        NSBezierPath(
+            roundedRect: bounds.insetBy(dx: 8, dy: 2),
+            xRadius: 8,
+            yRadius: 8
+        ).fill()
+    }
+}
+
+/// Recolours its two-tone text (preview + app + time) when the row becomes selected,
+/// so dark text never sits on the accent highlight.
+@MainActor
+private final class HistoryCellView: NSTableCellView {
+    private let clip: Clip
+    private let textLabel = NSTextField(labelWithString: "")
+    private let timeLabel = NSTextField(labelWithString: "")
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        formatter.dateTimeStyle = .numeric
+        return formatter
+    }()
+
+    init(clip: Clip) {
+        self.clip = clip
+        super.init(frame: .zero)
+
+        textLabel.lineBreakMode = .byWordWrapping
+        textLabel.usesSingleLineMode = false
+        textLabel.maximumNumberOfLines = 2
+        textLabel.toolTip = clip.text
+        textLabel.translatesAutoresizingMaskIntoConstraints = false
+        textLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        timeLabel.font = .systemFont(ofSize: 11)
+        timeLabel.translatesAutoresizingMaskIntoConstraints = false
+        timeLabel.setContentHuggingPriority(.required, for: .horizontal)
+        timeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        addSubview(textLabel)
+        addSubview(timeLabel)
+        NSLayoutConstraint.activate([
+            textLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+            textLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            textLabel.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 6),
+            textLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -6),
+
+            timeLabel.leadingAnchor.constraint(equalTo: textLabel.trailingAnchor, constant: 12),
+            timeLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            timeLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+
+        render()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { render() }
+    }
+
+    private func render() {
+        let emphasized = backgroundStyle == .emphasized
+        let primary = emphasized ? NSColor.selectedControlTextColor : NSColor.labelColor
+        let secondary = emphasized
+            ? NSColor.selectedControlTextColor.withAlphaComponent(0.7)
+            : NSColor.secondaryLabelColor
+        let tertiary = emphasized
+            ? NSColor.selectedControlTextColor.withAlphaComponent(0.55)
+            : NSColor.tertiaryLabelColor
+
+        let text = NSMutableAttributedString(
+            string: clip.preview,
+            attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: primary]
+        )
+        if let appName = clip.appName {
+            text.append(NSAttributedString(
+                string: "  ·  \(appName)",
+                attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: secondary]
+            ))
+        }
+        textLabel.attributedStringValue = text
+
+        timeLabel.textColor = tertiary
+        timeLabel.stringValue = Self.relativeFormatter.localizedString(
+            for: clip.createdAt,
+            relativeTo: Date()
+        )
     }
 }
