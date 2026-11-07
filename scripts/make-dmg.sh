@@ -18,16 +18,16 @@ swiftc -O -module-cache-path "$WORK/mcache" "$ROOT/scripts/make-background.swift
 # 3. Stage the volume contents
 STAGE="$WORK/stage"
 mkdir -p "$ROOT/dist" "$STAGE"
-cp -R "$ROOT/build/Siaheh.app" "$STAGE/"
+cp -R "$ROOT/build/Engram.app" "$STAGE/"
 cp "$WORK/background.png" "$STAGE/background.png"
 
 cat > "$STAGE/settings.py" <<'PY'
 import os
 format = "UDZO"
-files = [os.path.join(os.getcwd(), "Siaheh.app")]
+files = [os.path.join(os.getcwd(), "Engram.app")]
 symlinks = {"Applications": "/Applications"}
 background = "background.png"
-icon_locations = {"Siaheh.app": (150, 205), "Applications": (430, 205)}
+icon_locations = {"Engram.app": (150, 205), "Applications": (430, 205)}
 window_rect = ((120, 120), (660, 400))
 default_view = "icon-view"
 show_icon_preview = False
@@ -46,5 +46,5 @@ show_pathbar = False
 PY
 
 # 4. Build the disk image
-(cd "$STAGE" && python3 -m dmgbuild -s settings.py "Siaheh" "$ROOT/dist/Siaheh.dmg")
-echo "wrote $ROOT/dist/Siaheh.dmg"
+(cd "$STAGE" && python3 -m dmgbuild -s settings.py "Engram" "$ROOT/dist/Engram.dmg")
+echo "wrote $ROOT/dist/Engram.dmg"

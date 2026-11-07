@@ -6,7 +6,7 @@ import AppKit
 final class SettingsWindowController: NSWindowController {
     private let store: ClipStore
     private let launchAtLoginButton = NSButton(
-        checkboxWithTitle: "Start Siaheh at system startup",
+        checkboxWithTitle: "Start Engram at system startup",
         target: nil,
         action: nil
     )
@@ -107,7 +107,7 @@ final class SettingsWindowController: NSWindowController {
     private func refreshControls() {
         launchAtLoginButton.state = LaunchAtLogin.isOn ? .on : .off
         launchAtLoginButton.toolTip = LaunchAtLogin.needsApproval
-            ? "Allow Siaheh in System Settings → General → Login Items"
+            ? "Allow Engram in System Settings → General → Login Items"
             : nil
 
         let limit = Settings.retentionLimit

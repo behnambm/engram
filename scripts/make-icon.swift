@@ -1,6 +1,6 @@
 import AppKit
 
-// Generates the Siaheh app icon master (1024x1024): a white paperclip on a full-bleed
+// Generates the Engram app icon master (1024x1024): a white brain on a full-bleed
 // indigo gradient. Modern macOS applies the squircle rounding itself, so the corners
 // stay filled. Run from scripts/make-icon.sh, which turns this into a .icns.
 
@@ -26,8 +26,8 @@ let gradient = NSGradient(colors: [
 ])
 gradient?.draw(in: canvas, angle: -90)
 
-// The paperclip, white with a soft drop shadow.
-if let symbol = NSImage(systemSymbolName: "paperclip", accessibilityDescription: nil),
+// The brain, white with a soft drop shadow.
+if let symbol = NSImage(systemSymbolName: "brain", accessibilityDescription: nil),
    let configured = symbol.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 560, weight: .regular)) {
     // Tint the symbol white with a source-atop fill — the reliable way to colour an
     // SF Symbol (raw draw() draws the glyph in its own colour and ignores the current one).

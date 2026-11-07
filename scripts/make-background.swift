@@ -33,7 +33,7 @@ if let sym = NSImage(systemSymbolName: "paperclip", accessibilityDescription: ni
     tinted.draw(in: gr)
 }
 
-centerText("Siaheh", font: .systemFont(ofSize: 52, weight: .bold), color: .white, y: 116)
+centerText("Engram", font: .systemFont(ofSize: 52, weight: .bold), color: .white, y: 116)
 centerText("Drag into your Applications folder",
            font: .systemFont(ofSize: 16, weight: .regular),
            color: NSColor.white.withAlphaComponent(0.85), y: 176)

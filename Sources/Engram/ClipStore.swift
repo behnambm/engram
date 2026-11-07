@@ -40,7 +40,7 @@ final class ClipStore {
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
     init() throws {
-        let directory = URL.applicationSupportDirectory.appending(path: "Siaheh", directoryHint: .isDirectory)
+        let directory = URL.applicationSupportDirectory.appending(path: "Engram", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appending(path: "history.sqlite")
 
@@ -157,7 +157,7 @@ final class ClipStore {
             }
         } catch {
             // Trimming is housekeeping, not a user action: log it instead of interrupting.
-            NSLog("Siaheh: could not trim clipboard history: \(error.localizedDescription)")
+            NSLog("Engram: could not trim clipboard history: \(error.localizedDescription)")
         }
     }
 

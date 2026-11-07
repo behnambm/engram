@@ -1,6 +1,6 @@
 import AppKit
 
-/// Menu-bar agent: a paperclip in the status bar, a global shortcut that opens the
+/// Menu-bar agent: a brain in the status bar, a global shortcut that opens the
 /// clipboard history, and the history recorder behind both.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -29,10 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = item.button {
-            let icon = NSImage(systemSymbolName: "paperclip", accessibilityDescription: "Clipboard")
+            let icon = NSImage(systemSymbolName: "brain", accessibilityDescription: "Engram")
             icon?.isTemplate = true
             button.image = icon
-            button.toolTip = "Siaheh"
+            button.toolTip = "Engram"
             button.target = self
             button.action = #selector(handleClick)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -88,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.watcher = watcher
         } catch {
             let alert = NSAlert()
-            alert.messageText = "Siaheh could not open its clipboard history"
+            alert.messageText = "Engram could not open its clipboard history"
             alert.informativeText = error.localizedDescription
             alert.runModal()
             NSApp.terminate(nil)
@@ -102,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if !registered {
-            NSLog("Siaheh: \(combo.displayString) is already taken; pick another shortcut in Settings")
+            NSLog("Engram: \(combo.displayString) is already taken; pick another shortcut in Settings")
         }
     }
 

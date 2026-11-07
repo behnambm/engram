@@ -1,4 +1,4 @@
-# siaheh
+# engram
 
 A macOS clipboard manager: a CopyClip-class menu-bar app with **search and filtering that stays
 instant as history grows**.
@@ -12,25 +12,25 @@ instant as history grows**.
 4. Move with **↑ ↓**, then **Enter** to copy the selected clip and close the window — or just click a
    clip to copy it and close.
 5. **Esc** closes without copying.
-6. Right-click the paperclip for **Clipboard History**, **Settings** and **Quit**.
+6. Right-click the brain for **Clipboard History**, **Settings** and **Quit**.
 
 Settings holds the history retention limit (default **No limit**), the shortcut recorder, and
 start-at-login.
 
 | File | What it is |
 |---|---|
-| `Sources/Siaheh/main.swift` | Menu-bar agent: status item, menu, and wiring of store/watcher/hotkey/windows. |
-| `Sources/Siaheh/ClipStore.swift` | SQLite history plus an FTS5 index over the text. `id` is the rowid, so newest-first is `ORDER BY id DESC` / `ORDER BY f.rowid DESC` — no sort, no timestamp index, no `rank`. |
-| `Sources/Siaheh/ClipboardWatcher.swift` | Polls `changeCount` every 500 ms; skips concealed/transient/password-manager pasteboard types. |
-| `Sources/Siaheh/HistoryWindow.swift` | The centered list window: arrows, Return, click-to-copy, closes on copy. |
-| `Sources/Siaheh/HotKey.swift` | Carbon `RegisterEventHotKey` — a global shortcut with no Accessibility permission. |
-| `Sources/Siaheh/Settings.swift` | `UserDefaults`-backed preferences. Launch-at-login is *not* here (the system owns it). |
-| `Sources/Siaheh/SettingsWindow.swift` | Settings window plus the shortcut recorder button. |
-| `Sources/Siaheh/LaunchAtLogin.swift` | Login-item state via `SMAppService`. |
+| `Sources/Engram/main.swift` | Menu-bar agent: status item, menu, and wiring of store/watcher/hotkey/windows. |
+| `Sources/Engram/ClipStore.swift` | SQLite history plus an FTS5 index over the text. `id` is the rowid, so newest-first is `ORDER BY id DESC` / `ORDER BY f.rowid DESC` — no sort, no timestamp index, no `rank`. |
+| `Sources/Engram/ClipboardWatcher.swift` | Polls `changeCount` every 500 ms; skips concealed/transient/password-manager pasteboard types. |
+| `Sources/Engram/HistoryWindow.swift` | The centered list window: arrows, Return, click-to-copy, closes on copy. |
+| `Sources/Engram/HotKey.swift` | Carbon `RegisterEventHotKey` — a global shortcut with no Accessibility permission. |
+| `Sources/Engram/Settings.swift` | `UserDefaults`-backed preferences. Launch-at-login is *not* here (the system owns it). |
+| `Sources/Engram/SettingsWindow.swift` | Settings window plus the shortcut recorder button. |
+| `Sources/Engram/LaunchAtLogin.swift` | Login-item state via `SMAppService`. |
 | `Package.swift` | Swift package (Swift 6, macOS 14+). No dependencies; uses the system SQLite. |
 | `Support/Info.plist` | Bundle metadata. `LSUIElement` = no Dock icon, no app switcher entry. |
-| `Support/AppIcon.icns` | The app icon (white paperclip on an indigo gradient). Regenerate with `scripts/make-icon.sh`. |
-| `scripts/build-app.sh` | Builds the package and assembles `build/Siaheh.app` (a bundle is required for `LSUIElement`). |
+| `Support/AppIcon.icns` | The app icon (white brain on an indigo gradient). Regenerate with `scripts/make-icon.sh`. |
+| `scripts/build-app.sh` | Builds the package and assembles `build/Engram.app` (a bundle is required for `LSUIElement`). |
 | `scripts/make-icon.swift` / `make-icon.sh` | Draw and render the app icon to `AppIcon.icns` (SF Symbol + `iconutil`). |
 | `docs/clipboard-manager-research.md` | The decision document: market, platform constraints, measured benchmarks, architecture, feature spec, build plan. **Start here.** |
 | `docs/storage-research.md` | Storage/search appendix: validated DDL, every FTS5 failure mode reproduced, library comparison. |
@@ -42,14 +42,14 @@ start-at-login.
 ```sh
 ./scripts/build-app.sh          # debug
 ./scripts/build-app.sh release  # release
-open build/Siaheh.app
-pkill -f Siaheh.app             # stop it
+open build/Engram.app
+pkill -f Engram.app             # stop it
 ```
 
 `Package.swift` also opens directly in Xcode, but launch the built `.app` (not the bare binary) when
 behaviour depends on the bundle: `LSUIElement`, the login item, and the app's TCC identity.
 
-History lives at `~/Library/Application Support/Siaheh/history.sqlite` (WAL mode). Delete the folder
+History lives at `~/Library/Application Support/Engram/history.sqlite` (WAL mode). Delete the folder
 to reset it.
 
 ## How search works

@@ -7,7 +7,7 @@ import Carbon.HIToolbox
 final class GlobalHotKey {
     static let shared = GlobalHotKey()
 
-    private static let signature: OSType = 0x5349_4148  // 'SIAH'
+    private static let signature: OSType = 0x454E_4752  // 'ENGR'
     private static let hotKeyID: UInt32 = 1
 
     private var hotKeyRef: EventHotKeyRef?
@@ -91,7 +91,7 @@ private let hotKeyEventHandler: EventHandlerUPP = { _, event, _ in
         nil,
         &hotKeyID
     )
-    guard status == noErr, hotKeyID.signature == 0x5349_4148 else { return status }
+    guard status == noErr, hotKeyID.signature == 0x454E_4752 else { return status }
 
     DispatchQueue.main.async {
         MainActor.assumeIsolated { GlobalHotKey.shared.fire() }

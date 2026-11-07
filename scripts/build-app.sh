@@ -7,7 +7,7 @@ set -euo pipefail
 
 CONFIG="${1:-debug}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP_NAME="Siaheh"
+APP_NAME="Engram"
 APP="$ROOT/build/$APP_NAME.app"
 
 BIN_DIR="$(swift build -c "$CONFIG" --package-path "$ROOT" --show-bin-path)"
