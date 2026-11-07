@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Engram — Your clipboard's memory</title>
+<meta name="description" content="Engram is a fast, searchable clipboard history for macOS. Everything you copy, always within reach.">
+<link rel="icon" href="icon.png" type="image/png">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:
+      radial-gradient(1100px 700px at 80% -10%, rgba(88,103,232,.55) 0%, rgba(88,103,232,0) 60%),
+      radial-gradient(900px 600px at 10% 0%, rgba(46,196,182,.18) 0%, rgba(46,196,182,0) 55%),
+      linear-gradient(180deg, #161c45 0%, #0d1130 55%, #0a0d24 100%);
+    color: #eef0ff;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 28px 24px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
+  .brand img { width: 26px; height: 26px; border-radius: 6px; }
+  header nav a { color: #aab2e0; text-decoration: none; font-size: 14px; margin-left: 20px; }
+  header nav a:hover { color: #fff; }
+
+  .hero { text-align: center; padding: 72px 24px 56px; }
+  .logo {
+    width: 132px; height: 132px; border-radius: 30px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.08) inset;
+    margin-bottom: 28px;
+  }
+  h1 { font-size: 64px; letter-spacing: -1.5px; font-weight: 800; line-height: 1.05; }
+  .tagline { font-size: 24px; margin-top: 10px; color: #d7dcff; font-weight: 600; }
+  .sub { font-size: 17px; color: #9aa3d6; max-width: 560px; margin: 16px auto 0; }
+  .cta { margin-top: 34px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .btn {
+    display: inline-block; background: #5867e8; color: #fff; text-decoration: none;
+    padding: 14px 34px; border-radius: 12px; font-size: 17px; font-weight: 700;
+    box-shadow: 0 10px 30px rgba(88,103,232,.4); transition: transform .12s ease, background .12s ease;
+  }
+  .btn:hover { background: #6574f2; transform: translateY(-1px); }
+  .hint { font-size: 13.5px; color: #7f88c0; }
+
+  .keys { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+  .keys kbd {
+    font-family: inherit; font-size: 13px; color: #cdd2f5;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
+    border-bottom-width: 2px; border-radius: 6px; padding: 4px 9px;
+  }
+
+  section { padding: 40px 0; }
+  h2 { font-size: 30px; letter-spacing: -.5px; text-align: center; font-weight: 750; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 34px; }
+  .card {
+    background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.09);
+    border-radius: 16px; padding: 26px 24px;
+  }
+  .card .glyph { font-size: 24px; margin-bottom: 12px; }
+  .card h3 { font-size: 17px; margin-bottom: 8px; font-weight: 700; }
+  .card p { font-size: 14.5px; color: #a6aedc; }
+
+  .strip {
+    margin: 24px auto 0; max-width: 720px; text-align: center;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09);
+    border-radius: 16px; padding: 30px 28px;
+  }
+  .strip p { color: #a6aedc; font-size: 15.5px; }
+
+  footer { text-align: center; color: #6d76ad; font-size: 13px; padding: 44px 24px 56px; }
+  footer a { color: #9aa3d6; text-decoration: none; }
+  footer a:hover { color: #fff; }
+
+  @media (max-width: 760px) {
+    h1 { font-size: 46px; }
+    .grid { grid-template-columns: 1fr; }
+    .hero { padding-top: 48px; }
+  }
+</style>
+</head>
+<body>
+  <header class="wrap">
+    <div class="brand"><img src="icon.png" alt="">Engram</div>
+    <nav><a href="#features">Features</a><a href="#download">Download</a></nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <img class="logo" src="icon.png" alt="Engram app icon">
+      <h1>Engram</h1>
+      <p class="tagline">Your clipboard's memory.</p>
+      <p class="sub">A fast, searchable clipboard history for your Mac. Everything you copy, always within reach — press a key, search, paste.</p>
+      <div class="keys">
+        <kbd>⌥</kbd><kbd>⌘</kbd><kbd>V</kbd><span style="color:#7f88c0;align-self:center">open</span>
+        <kbd>↑</kbd><kbd>↓</kbd><span style="color:#7f88c0;align-self:center">choose</span>
+        <kbd>⏎</kbd><span style="color:#7f88c0;align-self:center">paste</span>
+      </div>
+      <div class="cta" id="download">
+        <a class="btn" href="Engram.dmg" download>Download for macOS</a>
+        <span class="hint">Free · macOS 14+ · lives in your menu bar</span>
+      </div>
+    </section>
+
+    <section id="features" class="wrap">
+      <h2>Built to feel instant</h2>
+      <div class="grid">
+        <div class="card"><div class="glyph">⚡</div><h3>Instant search</h3><p>Search your entire history as you type. It stays fast at 100,000 clips, not just 100.</p></div>
+        <div class="card"><div class="glyph">⌘</div><h3>Keyboard-first</h3><p>Arrows to move, Enter to paste, Esc to dismiss. Your hands never leave the keyboard.</p></div>
+        <div class="card"><div class="glyph">🧠</div><h3>Memory with context</h3><p>Every clip remembers where it came from and when, with relative timestamps.</p></div>
+        <div class="card"><div class="glyph">🔒</div><h3>Private by design</h3><p>Skips password managers and stores everything locally in SQLite. No cloud, no account.</p></div>
+        <div class="card"><div class="glyph">∞</div><h3>No limits</h3><p>Keep unlimited history, or cap it — duplicate copies bump to the top instead of piling up.</p></div>
+        <div class="card"><div class="glyph">🍃</div><h3>Lightweight</h3><p>A native menu-bar app. No Electron, no telemetry, near-zero CPU when idle.</p></div>
+      </div>
+    </section>
+
+    <section class="wrap">
+      <div class="strip">
+        <h2 style="font-size:22px;margin-bottom:10px">Install in seconds</h2>
+        <p>Open the disk image and drag <strong>Engram</strong> into <strong>Applications</strong>. Then copy as usual — Engram remembers it all.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Engram · a clipboard manager for macOS · <a href="https://github.com/behnambm">behnambm</a></p>
+  </footer>
+</body>
+</html>
