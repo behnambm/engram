@@ -7,130 +7,713 @@
 <meta name="description" content="Engram is a fast, searchable clipboard history for macOS. Everything you copy, always within reach.">
 <link rel="icon" href="icon.png" type="image/png">
 <style>
-  :root { color-scheme: dark; }
+  /* ============================================================
+     Design tokens — adaptive light/dark; spring-tuned motion.
+     ============================================================ */
+  :root {
+    color-scheme: light dark;
+
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    --accent: #5867e8;
+    --accent-hover: #6574f2;
+    --accent-press: #4c5ad1;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(88, 103, 232, 0.12);
+
+    --bg: #fbfbfd;
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-tertiary: #86868b;
+    --hairline: rgba(0, 0, 0, 0.08);
+    --hairline-strong: rgba(0, 0, 0, 0.16);
+
+    --glass: rgba(255, 255, 255, 0.55);
+    --glass-solid: #ffffff;
+    --card: rgba(255, 255, 255, 0.66);
+    --card-solid: #ffffff;
+    --card-hover: rgba(255, 255, 255, 0.85);
+
+    --kbd-bg: rgba(0, 0, 0, 0.045);
+    --kbd-border: rgba(0, 0, 0, 0.14);
+    --kbd-text: #33333a;
+
+    --glow-a: rgba(88, 103, 232, 0.16);
+    --glow-b: rgba(46, 196, 182, 0.12);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.04), 0 16px 40px rgba(0, 0, 0, 0.10);
+    --shadow-cta: 0 10px 32px rgba(88, 103, 232, 0.28);
+    --shadow-product: 0 40px 90px rgba(0, 0, 0, 0.18), 0 12px 30px rgba(0, 0, 0, 0.10);
+
+    --radius: 20px;
+    --radius-lg: 28px;
+
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --accent: #6b79f0;
+      --accent-hover: #7c88ff;
+      --accent-press: #5867e8;
+      --accent-soft: rgba(107, 121, 240, 0.16);
+
+      --bg: #0a0c1c;
+      --text: #f5f5f7;
+      --text-secondary: #a1a1a6;
+      --text-tertiary: #71717a;
+      --hairline: rgba(255, 255, 255, 0.10);
+      --hairline-strong: rgba(255, 255, 255, 0.20);
+
+      --glass: rgba(13, 16, 36, 0.55);
+      --glass-solid: #0d1024;
+      --card: rgba(255, 255, 255, 0.05);
+      --card-solid: #141830;
+      --card-hover: rgba(255, 255, 255, 0.09);
+
+      --kbd-bg: rgba(255, 255, 255, 0.06);
+      --kbd-border: rgba(255, 255, 255, 0.16);
+      --kbd-text: #d6d9ff;
+
+      --glow-a: rgba(88, 103, 232, 0.34);
+      --glow-b: rgba(46, 196, 182, 0.16);
+
+      --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 4px 12px rgba(0, 0, 0, 0.30);
+      --shadow-md: 0 16px 40px rgba(0, 0, 0, 0.50);
+      --shadow-cta: 0 10px 40px rgba(88, 103, 232, 0.40);
+      --shadow-product: 0 40px 90px rgba(0, 0, 0, 0.60), 0 12px 30px rgba(0, 0, 0, 0.35);
+    }
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background:
-      radial-gradient(1100px 700px at 80% -10%, rgba(88,103,232,.55) 0%, rgba(88,103,232,0) 60%),
-      radial-gradient(900px 600px at 10% 0%, rgba(46,196,182,.18) 0%, rgba(46,196,182,0) 55%),
-      linear-gradient(180deg, #161c45 0%, #0d1130 55%, #0a0d24 100%);
-    color: #eef0ff;
-    line-height: 1.6;
+    font-family: var(--font);
+    font-size: 17px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    color: var(--text);
     min-height: 100vh;
+    background:
+      radial-gradient(1100px 700px at 82% -12%, var(--glow-a) 0%, transparent 60%),
+      radial-gradient(900px 600px at 8% -6%, var(--glow-b) 0%, transparent 55%),
+      var(--bg);
+    transition: color 0.3s var(--ease-out);
   }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
 
-  header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 28px 24px 0;
-  }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
-  .brand img { width: 26px; height: 26px; border-radius: 6px; }
-  header nav a { color: #aab2e0; text-decoration: none; font-size: 14px; margin-left: 20px; }
-  header nav a:hover { color: #fff; }
+  a { color: inherit; }
+  img { display: block; }
 
-  .hero { text-align: center; padding: 72px 24px 56px; }
-  .logo {
-    width: 132px; height: 132px; border-radius: 30px;
-    box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.08) inset;
-    margin-bottom: 28px;
+  /* ---------- Typography ---------- */
+  h1, h2, h3 { font-family: var(--display); font-optical-sizing: auto; }
+  h1 {
+    font-size: clamp(44px, 8vw, 88px);
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+    font-weight: 800;
+    text-wrap: balance;
   }
-  h1 { font-size: 64px; letter-spacing: -1.5px; font-weight: 800; line-height: 1.05; }
-  .tagline { font-size: 24px; margin-top: 10px; color: #d7dcff; font-weight: 600; }
-  .sub { font-size: 17px; color: #9aa3d6; max-width: 560px; margin: 16px auto 0; }
-  .cta { margin-top: 34px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  h2 {
+    font-size: clamp(28px, 4.5vw, 44px);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .sub { font-size: 19px; line-height: 1.55; color: var(--text-secondary); }
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+
+  /* ---------- Header ---------- */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--glass);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.3s var(--ease-out), background 0.3s var(--ease-out);
+  }
+  .header.scrolled { border-bottom-color: var(--hairline); }
+  .header-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+  }
+  .brand img { width: 26px; height: 26px; border-radius: 7px; }
+  .header-nav { display: flex; align-items: center; gap: 4px; }
+  .header-nav a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: color 0.2s var(--ease-out), background 0.2s var(--ease-out);
+  }
+  .header-nav a:hover { color: var(--text); background: var(--kbd-bg); }
+  .header-nav a:active { opacity: 0.6; }
+
+  /* ---------- Buttons ---------- */
   .btn {
-    display: inline-block; background: #5867e8; color: #fff; text-decoration: none;
-    padding: 14px 34px; border-radius: 12px; font-size: 17px; font-weight: 700;
-    box-shadow: 0 10px 30px rgba(88,103,232,.4); transition: transform .12s ease, background .12s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: var(--accent-ink);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 16px;
+    padding: 13px 30px;
+    border-radius: 980px;
+    box-shadow: var(--shadow-cta);
+    will-change: transform;
+    transition: transform 0.2s var(--ease-spring), background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
   }
-  .btn:hover { background: #6574f2; transform: translateY(-1px); }
-  .hint { font-size: 13.5px; color: #7f88c0; }
+  .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+  .btn:active { background: var(--accent-press); transform: scale(0.97); transition-duration: 0.08s; }
+  .btn-sm { padding: 8px 16px; font-size: 14px; }
 
-  .keys { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
-  .keys kbd {
-    font-family: inherit; font-size: 13px; color: #cdd2f5;
-    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
-    border-bottom-width: 2px; border-radius: 6px; padding: 4px 9px;
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 16px;
+    padding: 13px 24px;
+    border-radius: 980px;
+    transition: color 0.2s var(--ease-out), background 0.2s var(--ease-out);
+  }
+  .btn-ghost:hover { background: var(--accent-soft); }
+  .btn-ghost:active { opacity: 0.6; }
+
+  /* ---------- Hero ---------- */
+  .hero { text-align: center; padding: 104px 24px 0; }
+  .hero .sub { max-width: 620px; margin: 20px auto 0; }
+  .cta {
+    margin-top: 34px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
-  section { padding: 40px 0; }
-  h2 { font-size: 30px; letter-spacing: -.5px; text-align: center; font-weight: 750; }
-
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 34px; }
-  .card {
-    background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.09);
-    border-radius: 16px; padding: 26px 24px;
+  .product-wrap { margin-top: 72px; position: relative; padding-bottom: 80px; }
+  .product-wrap::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    width: min(720px, 80%);
+    height: 60px;
+    background: radial-gradient(ellipse at center, var(--glow-a) 0%, transparent 70%);
+    filter: blur(6px);
   }
-  .card .glyph { font-size: 24px; margin-bottom: 12px; }
-  .card h3 { font-size: 17px; margin-bottom: 8px; font-weight: 700; }
-  .card p { font-size: 14.5px; color: #a6aedc; }
 
-  .strip {
-    margin: 24px auto 0; max-width: 720px; text-align: center;
-    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09);
-    border-radius: 16px; padding: 30px 28px;
+  /* The product itself: a faithful, CSS-drawn copy of the history window. */
+  .window {
+    position: relative;
+    max-width: 640px;
+    margin: 0 auto;
+    text-align: left;
+    background: var(--card);
+    -webkit-backdrop-filter: saturate(180%) blur(28px);
+    backdrop-filter: saturate(180%) blur(28px);
+    border: 1px solid var(--hairline-strong);
+    border-radius: 16px;
+    box-shadow: var(--shadow-product);
+    overflow: hidden;
   }
-  .strip p { color: #a6aedc; font-size: 15.5px; }
+  .window-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .tl { width: 12px; height: 12px; border-radius: 50%; }
+  .tl-close { background: #ff5f57; }
+  .tl-min { background: #febc2e; }
+  .tl-max { background: #28c840; }
+  .window-title {
+    margin-left: 8px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+  }
+  .window-body { padding: 14px 16px 12px; }
 
-  footer { text-align: center; color: #6d76ad; font-size: 13px; padding: 44px 24px 56px; }
-  footer a { color: #9aa3d6; text-decoration: none; }
-  footer a:hover { color: #fff; }
+  .mock-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--kbd-bg);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .mag {
+    flex: 0 0 auto;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--text-tertiary);
+    border-radius: 50%;
+    position: relative;
+  }
+  .mag::after {
+    content: "";
+    position: absolute;
+    right: -4px;
+    bottom: -3px;
+    width: 5px;
+    height: 1.5px;
+    background: var(--text-tertiary);
+    transform: rotate(45deg);
+    transform-origin: left center;
+  }
+  .mock-search .caret {
+    width: 1px;
+    height: 1em;
+    background: var(--accent);
+    animation: blink 1s steps(2, start) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
 
-  @media (max-width: 760px) {
-    h1 { font-size: 46px; }
-    .grid { grid-template-columns: 1fr; }
-    .hero { padding-top: 48px; }
+  .mock-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+  .mock-row.selected { background: var(--accent-soft); }
+  .mock-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mock-meta {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+  .window-status {
+    padding: 8px 12px 2px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  /* ---------- Stats band ---------- */
+  .stats {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 72px 24px 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    text-align: center;
+  }
+  .stat-num {
+    font-family: var(--display);
+    font-size: clamp(40px, 6vw, 64px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    background: linear-gradient(180deg, var(--text) 0%, var(--text-secondary) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .stat-label { margin-top: 8px; font-size: 14px; color: var(--text-secondary); max-width: 220px; margin-left: auto; margin-right: auto; }
+
+  /* ---------- Sections & bento ---------- */
+  .section { padding: 88px 0; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  .section-head { text-align: center; max-width: 640px; margin: 0 auto 56px; }
+  .section-head .sub { margin-top: 16px; }
+
+  .bento { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .tile {
+    background: var(--card);
+    -webkit-backdrop-filter: saturate(160%) blur(24px);
+    backdrop-filter: saturate(160%) blur(24px);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    padding: 30px 28px;
+    box-shadow: var(--shadow-sm);
+    will-change: transform;
+    transition: transform 0.35s var(--ease-out), background 0.35s var(--ease-out),
+                border-color 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out);
+  }
+  .tile:hover {
+    transform: translateY(-3px);
+    background: var(--card-hover);
+    border-color: var(--hairline-strong);
+    box-shadow: var(--shadow-md);
+  }
+  .tile:active { transform: translateY(-1px) scale(0.99); transition-duration: 0.08s; }
+  .tile .glyph { font-size: 30px; line-height: 1; margin-bottom: 16px; }
+  .tile h3 { margin-bottom: 8px; }
+  .tile p { font-size: 15px; line-height: 1.5; color: var(--text-secondary); }
+
+  .span-2 { grid-column: span 2; }
+  .span-3 { grid-column: span 3; }
+
+  .tile-wide {
+    grid-column: span 3;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    align-items: center;
+  }
+  .tile-wide .stat-num { font-size: clamp(40px, 5vw, 56px); text-align: left; }
+
+  /* mini search demo inside the flagship tile */
+  .demo {
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 360px;
+    background: var(--kbd-bg);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 15px;
+    color: var(--text);
+  }
+  .demo .caret { width: 1px; height: 1em; background: var(--accent); animation: blink 1s steps(2, start) infinite; }
+
+  /* ---------- Privacy band (always-dark, full bleed) ---------- */
+  .privacy {
+    background: linear-gradient(180deg, #11142e 0%, #0a0c1c 100%);
+    color: #f5f5f7;
+    text-align: center;
+    padding: 96px 24px;
+  }
+  .privacy .glyph {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 24px;
+    border-radius: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+  .privacy h2 { color: #f5f5f7; }
+  .privacy p { color: #b6b9d4; max-width: 560px; margin: 16px auto 0; font-size: 18px; line-height: 1.55; }
+  .privacy .points {
+    margin-top: 36px;
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .privacy .point {
+    font-size: 14px;
+    color: #e3e5f6;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 980px;
+    padding: 9px 18px;
+  }
+
+  /* ---------- Download band ---------- */
+  .download-band { text-align: center; padding: 96px 24px 120px; }
+  .download-band h2 { margin-bottom: 14px; }
+  .download-band .sub { max-width: 560px; margin: 0 auto; }
+  .download-band .cta { margin-top: 30px; }
+  .hint { font-size: 13.5px; color: var(--text-tertiary); margin-top: 14px; }
+
+  footer {
+    border-top: 1px solid var(--hairline);
+    padding: 32px 24px;
+  }
+  .footer-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--text-tertiary);
+  }
+  .footer-inner a { color: var(--text-secondary); text-decoration: none; }
+  .footer-inner a:hover { color: var(--text); }
+  .footer-links { display: flex; gap: 20px; }
+
+  #features, #privacy, #download { scroll-margin-top: 80px; }
+
+  /* ---------- Motion ---------- */
+  .js [data-reveal] { opacity: 0; }
+  .js [data-reveal].is-visible {
+    opacity: 1;
+    animation: rise 0.8s var(--ease-out) backwards;
+    animation-delay: var(--reveal-delay, 0s);
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 860px) {
+    .bento { grid-template-columns: 1fr; }
+    .span-2, .span-3, .tile-wide { grid-column: span 1; }
+    .tile-wide { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: 1fr; gap: 40px; }
+    .stat-num { font-size: 44px; }
+  }
+  @media (max-width: 640px) {
+    .hero { padding-top: 64px; }
+    .header-nav a[href="#features"],
+    .header-nav a[href="#privacy"] { display: none; }
+    .cta { flex-direction: column; }
+    .cta .btn { width: 100%; max-width: 320px; }
+  }
+
+  /* ---------- Accessibility ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .js [data-reveal] { opacity: 1; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .header, .window, .tile { -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .header { background: var(--glass-solid); }
+    .window, .tile { background: var(--card-solid); }
+  }
+  @media (prefers-contrast: more) {
+    .tile { border-color: var(--hairline-strong); }
+    .tile p, .sub, .header-nav a { color: var(--text); }
+    .stat-num { background: none; -webkit-text-fill-color: var(--text); }
   }
 </style>
 </head>
 <body>
-  <header class="wrap">
-    <div class="brand"><img src="icon.png" alt="">Engram</div>
-    <nav><a href="#features">Features</a><a href="#download">Download</a></nav>
+  <header class="header">
+    <div class="header-inner">
+      <a class="brand" href="#top"><img src="icon.png" alt="">Engram</a>
+      <nav class="header-nav">
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+        <a class="btn btn-sm" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download</a>
+      </nav>
+    </div>
   </header>
 
-  <main>
+  <main id="top">
+    <!-- Hero: benefit-first headline, then the product itself. -->
     <section class="hero">
-      <img class="logo" src="icon.png" alt="Engram app icon">
-      <h1>Engram</h1>
-      <p class="tagline">Your clipboard's memory.</p>
-      <p class="sub">A fast, searchable clipboard history for your Mac. Everything you copy, always within reach — press a key, search, paste.</p>
-      <div class="keys">
-        <kbd>⌥</kbd><kbd>⌘</kbd><kbd>V</kbd><span style="color:#7f88c0;align-self:center">open</span>
-        <kbd>↑</kbd><kbd>↓</kbd><span style="color:#7f88c0;align-self:center">choose</span>
-        <kbd>⏎</kbd><span style="color:#7f88c0;align-self:center">paste</span>
-      </div>
-      <div class="cta" id="download">
+      <p class="eyebrow" data-reveal>Clipboard history for macOS</p>
+      <h1 data-reveal style="--reveal-delay:.05s">Everything you copy,<br>remembered.</h1>
+      <p class="sub" data-reveal style="--reveal-delay:.10s">Engram is a fast, searchable clipboard history for your Mac. Press a key, search, paste — anything you've copied is always within reach.</p>
+      <div class="cta" data-reveal style="--reveal-delay:.15s">
         <a class="btn" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download for macOS</a>
-        <span class="hint">Free · macOS 14+ · lives in your menu bar</span>
+        <a class="btn-ghost" href="#features">See what it does</a>
+      </div>
+
+      <div class="product-wrap" data-reveal style="--reveal-delay:.2s">
+        <div class="window">
+          <div class="window-titlebar">
+            <span class="tl tl-close"></span><span class="tl tl-min"></span><span class="tl tl-max"></span>
+            <span class="window-title">Engram — Clipboard History</span>
+          </div>
+          <div class="window-body">
+            <div class="mock-search">
+              <span class="mag"></span><span>invoice</span><span class="caret"></span>
+            </div>
+            <div style="height:8px"></div>
+            <div class="mock-row selected">
+              <span class="mock-text">invoice client payment meeting timesheet</span>
+              <span class="mock-meta">Slack · 2m</span>
+            </div>
+            <div class="mock-row">
+              <span class="mock-text">git checkout -b feat/search</span>
+              <span class="mock-meta">Terminal · 14m</span>
+            </div>
+            <div class="mock-row">
+              <span class="mock-text">https://github.com/behnambm/engram</span>
+              <span class="mock-meta">Safari · 1h</span>
+            </div>
+            <div class="mock-row">
+              <span class="mock-text">npm install @deepseek-ai/dsh</span>
+              <span class="mock-meta">Terminal · 2h</span>
+            </div>
+            <div class="window-status">1,284 clips</div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section id="features" class="wrap">
-      <h2>Built to feel instant</h2>
-      <div class="grid">
-        <div class="card"><div class="glyph">⚡</div><h3>Instant search</h3><p>Search your entire history as you type. It stays fast at 100,000 clips, not just 100.</p></div>
-        <div class="card"><div class="glyph">⌘</div><h3>Keyboard-first</h3><p>Arrows to move, Enter to paste, Esc to dismiss. Your hands never leave the keyboard.</p></div>
-        <div class="card"><div class="glyph">🧠</div><h3>Memory with context</h3><p>Every clip remembers where it came from and when, with relative timestamps.</p></div>
-        <div class="card"><div class="glyph">🔒</div><h3>Private by design</h3><p>Skips password managers and stores everything locally in SQLite. No cloud, no account.</p></div>
-        <div class="card"><div class="glyph">∞</div><h3>No limits</h3><p>Keep unlimited history, or cap it — duplicate copies bump to the top instead of piling up.</p></div>
-        <div class="card"><div class="glyph">🍃</div><h3>Lightweight</h3><p>A native menu-bar app. No Electron, no telemetry, near-zero CPU when idle.</p></div>
+    <!-- Stats: the numbers behind "instant". -->
+    <section class="stats">
+      <div data-reveal>
+        <div class="stat-num">&lt;1&nbsp;ms</div>
+        <div class="stat-label">search results, even at 100,000 clips</div>
+      </div>
+      <div data-reveal style="--reveal-delay:.07s">
+        <div class="stat-num">100k</div>
+        <div class="stat-label">clips, and it never gets slower</div>
+      </div>
+      <div data-reveal style="--reveal-delay:.14s">
+        <div class="stat-num">0%</div>
+        <div class="stat-label">CPU while you're not copying</div>
       </div>
     </section>
 
-    <section class="wrap">
-      <div class="strip">
-        <h2 style="font-size:22px;margin-bottom:10px">Install in seconds</h2>
-        <p>Open the disk image and drag <strong>Engram</strong> into <strong>Applications</strong>. Then copy as usual — Engram remembers it all.</p>
+    <!-- Features: bento grid, flagship tile carries a live-search demo. -->
+    <section id="features" class="section wrap">
+      <div class="section-head">
+        <p class="eyebrow" data-reveal>Features</p>
+        <h2 data-reveal style="--reveal-delay:.05s">Built to feel instant</h2>
+        <p class="sub" data-reveal style="--reveal-delay:.10s">One SQLite database is the only source of truth. Search stays fast as your history grows — no in-memory mirror, no cloud.</p>
       </div>
+
+      <div class="bento">
+        <div class="tile span-2" data-reveal>
+          <div class="glyph">⚡</div>
+          <h3>Instant search</h3>
+          <p>Search your entire history as you type. Word-prefix search is served by a full-text index that stays sub-millisecond at 100,000 clips.</p>
+          <div class="demo"><span class="mag"></span><span>invoice</span><span class="caret"></span></div>
+        </div>
+        <div class="tile" data-reveal style="--reveal-delay:.06s">
+          <div class="glyph">⌘</div>
+          <h3>Keyboard-first</h3>
+          <p>Arrows to move, Enter to paste, Esc to dismiss. Your hands never leave the keyboard.</p>
+        </div>
+        <div class="tile" data-reveal>
+          <div class="glyph">🧠</div>
+          <h3>Memory with context</h3>
+          <p>Every clip remembers where it came from and when, with relative timestamps.</p>
+        </div>
+        <div class="tile" data-reveal style="--reveal-delay:.06s">
+          <div class="glyph">🔒</div>
+          <h3>Private by design</h3>
+          <p>Skips password managers. Stored locally in SQLite — no cloud, no account.</p>
+        </div>
+        <div class="tile" data-reveal style="--reveal-delay:.12s">
+          <div class="glyph">🍃</div>
+          <h3>Lightweight</h3>
+          <p>A native menu-bar app. No Electron, no telemetry, near-zero CPU when idle.</p>
+        </div>
+        <div class="tile tile-wide" data-reveal>
+          <div>
+            <div class="glyph">∞</div>
+            <h3>No limits</h3>
+            <p>Keep unlimited history, or cap it. Duplicate copies bump to the top instead of piling up.</p>
+          </div>
+          <div class="stat-num">12&nbsp;MB</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy: a full-bleed dark band for rhythm and trust. -->
+    <section id="privacy" class="privacy" data-reveal>
+      <div class="glyph">🔒</div>
+      <h2>Everything stays on your Mac.</h2>
+      <p>Engram never phones home. Your history lives in a local SQLite database, password-manager clips are skipped, and nothing you copy is ever sent to a server.</p>
+      <div class="points">
+        <span class="point">Local only</span>
+        <span class="point">No account</span>
+        <span class="point">No telemetry</span>
+        <span class="point">Skips passwords</span>
+      </div>
+    </section>
+
+    <!-- Download. -->
+    <section class="download-band" id="download">
+      <h2 data-reveal>Install in seconds.</h2>
+      <p class="sub" data-reveal style="--reveal-delay:.05s">Open the disk image, drag Engram into Applications, and keep copying as usual — Engram remembers it all.</p>
+      <div class="cta" data-reveal style="--reveal-delay:.10s">
+        <a class="btn" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download for macOS</a>
+      </div>
+      <p class="hint" data-reveal style="--reveal-delay:.15s">Free · macOS 14+ · lives in your menu bar</p>
     </section>
   </main>
 
   <footer>
-    <p>Engram · a clipboard manager for macOS · <a href="https://github.com/behnambm">behnambm</a></p>
+    <div class="footer-inner">
+      <span>Engram · a clipboard manager for macOS</span>
+      <div class="footer-links">
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+        <a href="https://github.com/behnambm">GitHub</a>
+      </div>
+    </div>
   </footer>
+
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add('js');
+
+      var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      var header = document.querySelector('.header');
+      function onScroll() {
+        header.classList.toggle('scrolled', window.scrollY > 4);
+      }
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+
+      var targets = Array.prototype.slice.call(document.querySelectorAll('[data-reveal]'));
+      if (reduceMotion || !('IntersectionObserver' in window)) {
+        targets.forEach(function (el) { el.classList.add('is-visible'); });
+        return;
+      }
+
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            io.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -32px 0px' });
+
+      targets.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
 </body>
 </html>
