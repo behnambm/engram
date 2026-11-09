@@ -31,7 +31,8 @@ enum Settings {
     static var hotKey: HotKeyCombo {
         get {
             guard let code = defaults.object(forKey: hotKeyCodeKey) as? Int,
-                  let modifiers = defaults.object(forKey: hotKeyModifiersKey) as? Int
+                  let modifiers = defaults.object(forKey: hotKeyModifiersKey) as? Int,
+                  modifiers != 0  // a bare key would swallow ordinary typing system-wide
             else { return .default }
 
             return HotKeyCombo(

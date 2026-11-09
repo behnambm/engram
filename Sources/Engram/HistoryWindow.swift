@@ -228,8 +228,10 @@ final class HistoryWindowController: NSWindowController {
         if trimmed.isEmpty {
             statusLabel.stringValue = "\(total.formatted()) clip\(total == 1 ? "" : "s")"
         } else {
-            let matches = store.matchCount(trimmed)
-            statusLabel.stringValue = "\(matches.formatted()) of \(total.formatted())"
+            // The rows shown are the union of prefix + substring matches (see
+            // ClipStore.search), capped at displayLimit. A "+" marks a capped page.
+            let capped = clips.count == Self.displayLimit
+            statusLabel.stringValue = "\(clips.count.formatted())\(capped ? "+" : "") of \(total.formatted())"
         }
         statusLabel.isHidden = false
     }

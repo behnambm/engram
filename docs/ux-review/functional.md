@@ -183,3 +183,22 @@ app's headline "sub-millisecond at 100k clips" guarantee.
 The trade-off is now explicit in `ClipStore.search()`'s doc comment, and the pinned test
 was relabeled from "KNOWN BUG" to "documented trade-off". If correctness-over-speed is
 ever preferred, the union fix (in the report above) is ready to apply; re-benchmark first.
+
+---
+
+## Bug-fix pass (follow-up commit)
+
+The lead fixed the reported bugs in a follow-up:
+
+- **BUG-1** — `ClipStore.search()` now unions FTS (prefix) + substring results, dedups by
+  id, newest-first. `search("pha")` returns both `"pharmacy"` and `"alpha"`. The
+  `matchCount()` helper was removed in favor of the displayed count (`clips.count`) with a
+  "+" suffix when the page is capped, so the status bar stays consistent without a second
+  full-table scan.
+- **S-1** — `recent(limit:)` / `search(_:limit:)` now clamp a negative limit to empty.
+- **S-3** — `matchExpression` folds diacritics (and width) so diacritic queries hit the FTS
+  index instead of falling back to a byte-exact `LIKE`.
+- **S-4** — `Settings.hotKey` getter rejects a stored bare key and falls back to `.default`.
+
+Regression tests added (85 total, all PASS). S-2 (exact-byte dedup) and S-5 (multi-token
+prefix only on last token) remain intentional, documented design choices.

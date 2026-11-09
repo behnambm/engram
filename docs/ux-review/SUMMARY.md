@@ -26,11 +26,14 @@ clipboard history from 150 → 6 clips. It was partially recovered:
 - Harness fixed to isolate with `CFFIXED_USER_HOME` (the only env var CoreFoundation honors
   for both `applicationSupportDirectory` and `UserDefaults`).
 
-## BUG-1 decision (search)
-`ClipStore.search()` drops mid-word substring hits when any FTS prefix hit exists. **Kept as a
-documented trade-off** — unioning would add a full-table `LIKE` scan (~12–16 ms at 100k clips)
-to every search, breaking the sub-millisecond guarantee. Doc comment + pinned test updated.
-Union fix is ready to apply if correctness-over-speed is ever wanted.
+## Bugs fixed (follow-up commit)
+- **BUG-1** — `ClipStore.search()` now unions prefix (FTS) + substring results, deduped and
+  newest-first, so mid-word hits are no longer dropped. Removed `matchCount` (status now uses
+  the displayed count with a "+" when capped).
+- **S-1** — negative `limit` now clamps to empty. **S-3** — diacritic queries fold to the FTS
+  index. **S-4** — a stored bare hotkey falls back to `.default`.
+- 85 regression tests pass. S-2 (exact-byte dedup) and S-5 (multi-token prefix) stay as
+  documented design choices.
 
 ## Reports
 - `docs/ux-review/app-ux.md`, `docs/ux-review/web-ux.md`, `docs/ux-review/functional.md`

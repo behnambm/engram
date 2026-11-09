@@ -89,16 +89,12 @@ struct Tests {
         check("substring fallback 'pha'", store.search("pha", limit: 10).map(\.text) == ["alpha"])
         check("case-insensitive 'ALPHA'", store.search("ALPHA", limit: 10).map(\.text) == ["alpha"])
 
-        // Documented trade-off (see docs/ux-review/functional.md BUG-1): when FTS finds
-        // ANY prefix hit, the substring fallback is skipped, so a query that is both a
-        // prefix of one clip and a mid-word substring of another returns only the prefix
-        // hits. "alpha" contains "pha" mid-word but is not returned once "pharmacy"
-        // exists. This is deliberate (unioning would force a full-table LIKE scan on
-        // every search); the lead benchmarked it and documented the decision in
-        // ClipStore.search().
+        // BUG-1 (fixed): a query that is BOTH a word-prefix of one clip and a mid-word
+        // substring of another returns both, newest-first. "pha" → "pharmacy" (prefix)
+        // and "alpha" (mid-word substring), with "pharmacy" newer.
         try store.insert(text: "pharmacy", appName: "AppD", appBundle: nil)
-        check("documented trade-off: prefix hit suppresses mid-word substring hit",
-              store.search("pha", limit: 10).map(\.text) == ["pharmacy"])
+        check("prefix + mid-word substring both returned (union)",
+              store.search("pha", limit: 10).map(\.text) == ["pharmacy", "alpha"])
 
         // MARK: search() — multi-token: full words AND, last token is the prefix
         store.deleteAll()
@@ -146,6 +142,16 @@ struct Tests {
         check("mixed-script: Latin token", store.search("world", limit: 10).map(\.text).contains("hello سلام world 123"))
         check("mixed-script: digit token", store.search("123", limit: 10).map(\.text).contains("hello سلام world 123"))
 
+        // MARK: search() — diacritics fold to the FTS index (S-3 fixed)
+        store.deleteAll()
+        try store.insert(text: "café", appName: "X", appBundle: nil)
+        check("diacritic query 'café' matches (folds to index)",
+              store.search("café", limit: 10).map(\.text).contains("café"))
+        check("plain query 'cafe' matches diacritic 'café' (remove_diacritics)",
+              store.search("cafe", limit: 10).map(\.text).contains("café"))
+        check("matchExpression folds diacritics",
+              ClipStore.matchExpression(for: "café") == "\"cafe\"*")
+
         // MARK: enforceRetention()
         store.deleteAll()
         Settings.retentionLimit = 5
@@ -178,7 +184,8 @@ struct Tests {
         check("recent(limit: 1) returns the newest", store.recent(limit: 1).map(\.text) == ["5"])
         check("recent(limit: count) returns all", store.recent(limit: 5).count == 5)
         check("recent(limit: > count) returns all", store.recent(limit: 100).count == 5)
-        check("recent(negative limit) returns all (SQLite LIMIT -1)", store.recent(limit: -1).count == 5)
+        check("recent(negative limit) returns empty (clamped)", store.recent(limit: -1).isEmpty)
+        check("search(negative limit) returns empty (clamped)", store.search("2", limit: -1).isEmpty)
 
         // MARK: HotKeyCombo.displayString — Apple order ⌃⌥⇧⌘ then key; bare key rejected
         check("bare key rejected (nil)", HotKeyCombo(keyCode: 9, modifierFlags: [], keyLabel: "v") == nil)
@@ -195,8 +202,17 @@ struct Tests {
         let ctrlOnly = HotKeyCombo(keyCode: 9, modifierFlags: [.control], keyLabel: "v")
         check("control alone => ⌃V", ctrlOnly?.displayString == "⌃V")
         check("lowercase keyLabel is uppercased", optCmd?.displayString == "⌥⌘V")
-        // The raw memberwise init does NOT reject a bare key (only the recording init does).
-        check("raw init permits a bare key (surprising)", HotKeyCombo(keyCode: 9, modifiers: 0, keyLabel: "v").displayString == "V")
+        // The low-level raw init still permits a bare key, but Settings.hotKey now
+        // rejects a stored bare key and falls back to .default (S-4 fixed).
+        check("raw init permits a bare key (low-level)", HotKeyCombo(keyCode: 9, modifiers: 0, keyLabel: "v").displayString == "V")
+        UserDefaults.standard.set(9, forKey: "hotKeyCode")
+        UserDefaults.standard.set(0, forKey: "hotKeyModifiers")
+        UserDefaults.standard.set("V", forKey: "hotKeyLabel")
+        check("Settings.hotKey falls back to .default for a stored bare key",
+              Settings.hotKey == HotKeyCombo.default)
+        UserDefaults.standard.removeObject(forKey: "hotKeyCode")
+        UserDefaults.standard.removeObject(forKey: "hotKeyModifiers")
+        UserDefaults.standard.removeObject(forKey: "hotKeyLabel")
 
         // MARK: matchExpression()
         check("matchExpression single token", ClipStore.matchExpression(for: "foo") == "\"foo\"*")

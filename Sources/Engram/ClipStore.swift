@@ -168,6 +168,7 @@ final class ClipStore {
     // MARK: - Reading
 
     func recent(limit: Int) -> [Clip] {
+        guard limit > 0 else { return [] }
         guard let statement = try? prepare("""
             SELECT id, text, app_name, created_at FROM clips ORDER BY id DESC LIMIT ?
             """) else { return [] }
@@ -178,51 +179,26 @@ final class ClipStore {
 
     /// Searches the *whole* history, newest first.
     ///
-    /// Word-prefix search (what typing produces) is served by FTS5. A mid-word query has no
-    /// FTS tokens to match, so it falls back to a substring scan — correct rather than fast,
-    /// and only paid when the fast path found nothing.
-    ///
-    /// Known trade-off: when a query is *both* a word-prefix of some clips and a mid-word
-    /// substring of others (e.g. "pha" matches "pharmacy" and "alpha"), only the prefix hits
-    /// are returned. Unioning the two would require a full-table `LIKE` scan on every search
-    /// (~12–16 ms at 100k clips, worse with large clips), which would break the sub-millisecond
-    /// prefix-search guarantee that is the whole point of this store. Kept prefix-fast on purpose.
+    /// A query can be a word-prefix of some clips and a mid-word substring of others
+    /// (e.g. "pha" → "pharmacy" and "alpha"). Both the FTS5 prefix set and the `LIKE`
+    /// substring set are returned, deduped by id and ordered newest-first, so neither
+    /// class of match is silently dropped. The substring scan is the slow path (~12–16 ms
+    /// at 100k clips); prefix-only queries could skip it, but correctness wins here.
     func search(_ query: String, limit: Int) -> [Clip] {
+        guard limit > 0 else { return [] }
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return recent(limit: limit) }
 
-        let matches = fullTextSearch(trimmed, limit: limit)
-        return matches.isEmpty ? substringSearch(trimmed, limit: limit) : matches
-    }
+        let prefix = fullTextSearch(trimmed, limit: limit)
+        let substring = substringSearch(trimmed, limit: limit)
 
-    /// Total number of clips matching `query`, ignoring the display cap. Mirrors
-    /// `search` so the reported count always agrees with the rows shown.
-    func matchCount(_ query: String) -> Int {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return count }
-
-        if let expression = Self.matchExpression(for: trimmed) {
-            let statement = try? prepare("SELECT COUNT(*) FROM clips_fts WHERE clips_fts MATCH ?")
-            if let statement {
-                defer { sqlite3_finalize(statement) }
-                sqlite3_bind_text(statement, 1, expression, -1, Self.transient)
-                if sqlite3_step(statement) == SQLITE_ROW {
-                    let matched = Int(sqlite3_column_int64(statement, 0))
-                    if matched > 0 { return matched }
-                }
-            }
+        var seen = Set<Int64>()
+        var merged: [Clip] = []
+        for clip in (prefix + substring).sorted(by: { $0.id > $1.id }) where seen.insert(clip.id).inserted {
+            merged.append(clip)
+            if merged.count == limit { break }
         }
-
-        let escaped = trimmed
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "%", with: "\\%")
-            .replacingOccurrences(of: "_", with: "\\_")
-        guard let statement = try? prepare("SELECT COUNT(*) FROM clips WHERE text LIKE ? ESCAPE '\\'") else {
-            return 0
-        }
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_text(statement, 1, "%\(escaped)%", -1, Self.transient)
-        return sqlite3_step(statement) == SQLITE_ROW ? Int(sqlite3_column_int64(statement, 0)) : 0
+        return merged
     }
 
     private func fullTextSearch(_ query: String, limit: Int) -> [Clip] {
@@ -266,7 +242,13 @@ final class ClipStore {
     /// and `"unclosed` are searched literally instead of raising an FTS syntax error. The
     /// trailing `*` sits outside the quotes — that is what makes it a prefix match.
     static func matchExpression(for input: String) -> String? {
-        let tokens = input.lowercased()
+        // Fold case and diacritics so the query matches the FTS index, which is built with
+        // `remove_diacritics 2` (so "café" is indexed as "cafe"). Without this, a query
+        // like "café" never hits the index and falls back to a byte-exact LIKE scan that
+        // misses the other normalization form.
+        let tokens = input
+            .lowercased()
+            .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: nil)
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
         guard !tokens.isEmpty else { return nil }
