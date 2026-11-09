@@ -34,10 +34,8 @@ final class SettingsWindowController: NSWindowController {
         window?.isMovableByWindowBackground = true
         window?.backgroundColor = .clear
         window?.isOpaque = false
-        // Match the history window's forced dark appearance so both surfaces read as
-        // one dark product. System control colors flip to their dark variants, keeping
-        // every label and control legible on the dark popover material.
-        window?.appearance = NSAppearance(named: .darkAqua)
+        // No forced appearance: the popover material and every native control follow
+        // the system light/dark setting, like System Settings does.
         window?.isReleasedWhenClosed = false
         window?.center()
         window?.contentView = makeContentView()

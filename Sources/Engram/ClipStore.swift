@@ -6,6 +6,7 @@ struct Clip: Identifiable {
     let id: Int64
     let text: String
     let appName: String?
+    let appBundle: String?
     let createdAt: Date
 
     /// A short version for the list: newlines and runs of whitespace collapsed, and
@@ -170,7 +171,7 @@ final class ClipStore {
     func recent(limit: Int) -> [Clip] {
         guard limit > 0 else { return [] }
         guard let statement = try? prepare("""
-            SELECT id, text, app_name, created_at FROM clips ORDER BY id DESC LIMIT ?
+            SELECT id, text, app_name, app_bundle, created_at FROM clips ORDER BY id DESC LIMIT ?
             """) else { return [] }
         defer { sqlite3_finalize(statement) }
         sqlite3_bind_int(statement, 1, Int32(limit))
@@ -207,7 +208,7 @@ final class ClipStore {
         // rowid is the copy order, so this stops as soon as it has enough rows (0.03–2 ms
         // at 100k clips) instead of scoring every match (12–25 ms).
         guard let statement = try? prepare("""
-            SELECT c.id, c.text, c.app_name, c.created_at
+            SELECT c.id, c.text, c.app_name, c.app_bundle, c.created_at
             FROM clips_fts f JOIN clips c ON c.id = f.rowid
             WHERE clips_fts MATCH ?
             ORDER BY f.rowid DESC
@@ -226,7 +227,7 @@ final class ClipStore {
             .replacingOccurrences(of: "_", with: "\\_")
 
         guard let statement = try? prepare("""
-            SELECT id, text, app_name, created_at FROM clips
+            SELECT id, text, app_name, app_bundle, created_at FROM clips
             WHERE text LIKE ? ESCAPE '\\'
             ORDER BY id DESC LIMIT ?
             """) else { return [] }
@@ -273,7 +274,8 @@ final class ClipStore {
                 id: sqlite3_column_int64(statement, 0),
                 text: String(cString: text),
                 appName: sqlite3_column_text(statement, 2).map { String(cString: $0) },
-                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3))
+                appBundle: sqlite3_column_text(statement, 3).map { String(cString: $0) },
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4))
             ))
         }
         return clips
