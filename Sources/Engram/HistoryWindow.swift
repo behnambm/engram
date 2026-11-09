@@ -42,6 +42,10 @@ final class HistoryWindowController: NSWindowController {
         window?.backgroundColor = .clear
         window?.isOpaque = false
         window?.hasShadow = true
+        // A hotkey palette must appear on the desktop the user is on, not the one the
+        // agent happened to launch from. moveToActiveSpace does that without switching
+        // Spaces; fullScreenAuxiliary lets it show over a full-screen app.
+        window?.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         window?.isReleasedWhenClosed = false
         window?.minSize = NSSize(width: 460, height: 320)
         window?.center()
@@ -124,6 +128,16 @@ final class HistoryWindowController: NSWindowController {
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        // Observe scroll so lingering trash hover can be reset when rows move under a
+        // stationary cursor (see clipViewDidScroll).
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(clipViewDidScroll),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
 
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.font = .systemFont(ofSize: 12)
@@ -228,6 +242,40 @@ final class HistoryWindowController: NSWindowController {
         pasteboard.setString(clip.text, forType: .string)
         window?.close()
     }
+
+    // MARK: - Deleting
+
+    private func deleteClip(_ clip: Clip) {
+        store.delete(id: clip.id)
+        reload()
+    }
+
+    private func deleteSelected() {
+        let row = tableView.selectedRow
+        guard clips.indices.contains(row) else { return }
+        deleteClip(clips[row])
+    }
+
+    /// Hover mirrors keyboard selection: hovering a row selects it, so Return and Delete
+    /// act on the entry under the pointer.
+    private func selectClip(_ clip: Clip) {
+        guard let index = clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        tableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        tableView.scrollRowToVisible(index)
+    }
+
+    /// Scrolling moves rows under a stationary cursor without a mouse-moved event, so a
+    /// trash button would linger on the row the pointer already left. Reset hover on every
+    /// visible row whenever the clip view scrolls.
+    @objc private func clipViewDidScroll() {
+        let rows = tableView.rows(in: tableView.visibleRect)
+        guard rows.length > 0 else { return }
+        for row in rows.location..<NSMaxRange(rows) {
+            if let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? HistoryCellView {
+                cell.resetHover()
+            }
+        }
+    }
 }
 
 extension HistoryWindowController: NSSearchFieldDelegate {
@@ -252,6 +300,14 @@ extension HistoryWindowController: NSSearchFieldDelegate {
         case #selector(NSResponder.cancelOperation(_:)):
             window?.close()
             return true
+        case #selector(NSResponder.deleteBackward(_:)), #selector(NSResponder.deleteForward(_:)):
+            // Backspace edits the query while it has text; on an empty field the delete
+            // key removes the selected entry instead.
+            if searchField.stringValue.isEmpty {
+                deleteSelected()
+                return true
+            }
+            return false
         default:
             return false
         }
@@ -264,7 +320,12 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        HistoryCellView(clip: clips[row])
+        let clip = clips[row]
+        return HistoryCellView(
+            clip: clip,
+            onDelete: { [weak self] in self?.deleteClip(clip) },
+            onHoverEnter: { [weak self] in self?.selectClip(clip) }
+        )
     }
 }
 
@@ -300,6 +361,45 @@ private final class HistoryTableView: NSTableView {
     }
 }
 
+/// A borderless trash button whose hover ring is a true circle. The ring is a circular
+/// `CAShapeLayer` path (not a rounded-rect border), so it can never stretch into an oval
+/// no matter how the button is sized.
+@MainActor
+private final class TrashButton: NSButton {
+    private let ringLayer = CAShapeLayer()
+
+    var showsRing = false {
+        didSet { ringLayer.isHidden = !showsRing }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        ringLayer.fillColor = nil
+        ringLayer.strokeColor = NSColor.systemRed.cgColor
+        ringLayer.lineWidth = 1.0
+        ringLayer.isHidden = true
+        layer?.addSublayer(ringLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func layout() {
+        super.layout()
+        ringLayer.frame = bounds
+        let diameter = min(bounds.width, bounds.height)
+        let circle = NSRect(
+            x: (bounds.width - diameter) / 2,
+            y: (bounds.height - diameter) / 2,
+            width: diameter,
+            height: diameter
+        ).insetBy(dx: ringLayer.lineWidth / 2, dy: ringLayer.lineWidth / 2)
+        ringLayer.path = CGPath(ellipseIn: circle, transform: nil)
+    }
+}
+
 /// Renders the clip as a two-line row: the source app's icon on the left, the preview
 /// on the first line, and "App · time ago" on the second.
 ///
@@ -310,9 +410,12 @@ private final class HistoryTableView: NSTableView {
 @MainActor
 private final class HistoryCellView: NSTableCellView {
     private let clip: Clip
+    private let onDelete: (@MainActor () -> Void)
+    private let onHoverEnter: (@MainActor () -> Void)
     private let iconView = NSImageView()
     private let textLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
+    private let trashButton = TrashButton()
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -343,8 +446,10 @@ private final class HistoryCellView: NSTableCellView {
         return relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 
-    init(clip: Clip) {
+    init(clip: Clip, onDelete: @escaping @MainActor () -> Void, onHoverEnter: @escaping @MainActor () -> Void) {
         self.clip = clip
+        self.onDelete = onDelete
+        self.onHoverEnter = onHoverEnter
         super.init(frame: .zero)
 
         iconView.translatesAutoresizingMaskIntoConstraints = false
@@ -363,9 +468,31 @@ private final class HistoryCellView: NSTableCellView {
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
         detailLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
+        // A borderless, red trash button revealed on hover.
+        let trashImage = NSImage(systemSymbolName: "trash.fill", accessibilityDescription: "Delete clip")
+        trashImage?.isTemplate = true
+        trashButton.image = trashImage
+        trashButton.isBordered = false
+        trashButton.contentTintColor = .systemRed
+        trashButton.toolTip = "Delete clip"
+        trashButton.target = self
+        trashButton.action = #selector(deleteTapped)
+        trashButton.isHidden = true
+        trashButton.translatesAutoresizingMaskIntoConstraints = false
+
+        // Scoped to the button so the red ring and hand cursor appear only while the
+        // pointer is over the trash icon, even though the button is usually hidden.
+        trashButton.addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: ["kind": "trash"]
+        ))
+
         addSubview(iconView)
         addSubview(textLabel)
         addSubview(detailLabel)
+        addSubview(trashButton)
         NSLayoutConstraint.activate([
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -373,13 +500,18 @@ private final class HistoryCellView: NSTableCellView {
             iconView.heightAnchor.constraint(equalToConstant: 16),
 
             textLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 10),
-            textLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+            textLabel.trailingAnchor.constraint(lessThanOrEqualTo: trashButton.leadingAnchor, constant: -8),
             textLabel.topAnchor.constraint(equalTo: topAnchor, constant: 7),
 
             detailLabel.leadingAnchor.constraint(equalTo: textLabel.leadingAnchor),
-            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trashButton.leadingAnchor, constant: -8),
             detailLabel.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: 2),
             detailLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -7),
+
+            trashButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            trashButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trashButton.widthAnchor.constraint(equalToConstant: 28),
+            trashButton.heightAnchor.constraint(equalToConstant: 28),
         ])
 
         render()
@@ -387,6 +519,56 @@ private final class HistoryCellView: NSTableCellView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: ["kind": "row"]
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        if event.trackingArea?.userInfo?["kind"] as? String == "trash" {
+            setTrashHovered(true)
+        } else {
+            trashButton.isHidden = false
+            onHoverEnter()
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        if event.trackingArea?.userInfo?["kind"] as? String == "trash" {
+            setTrashHovered(false)
+        } else {
+            trashButton.isHidden = true
+            setTrashHovered(false)
+        }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.pointingHand.set()
+    }
+
+    private func setTrashHovered(_ hovered: Bool) {
+        trashButton.showsRing = hovered
+    }
+
+    @objc private func deleteTapped() {
+        onDelete()
+    }
+
+    /// Hides the trash button and ring without waiting for a mouse-exited event. Called
+    /// on scroll, where rows move under a stationary cursor.
+    func resetHover() {
+        trashButton.isHidden = true
+        setTrashHovered(false)
     }
 
     override var backgroundStyle: NSView.BackgroundStyle {

@@ -166,6 +166,18 @@ final class ClipStore {
         try? execute("DELETE FROM clips")
     }
 
+    /// Removes one clip. The FTS triggers mirror the delete into the search index.
+    func delete(id: Int64) {
+        do {
+            let statement = try prepare("DELETE FROM clips WHERE id = ?")
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_int64(statement, 1, id)
+            try step(statement)
+        } catch {
+            NSLog("Engram: could not delete clip \(id): \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Reading
 
     func recent(limit: Int) -> [Clip] {

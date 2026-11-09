@@ -36,6 +36,7 @@ final class SettingsWindowController: NSWindowController {
         window?.isOpaque = false
         // No forced appearance: the popover material and every native control follow
         // the system light/dark setting, like System Settings does.
+        window?.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         window?.isReleasedWhenClosed = false
         window?.center()
         window?.contentView = makeContentView()
