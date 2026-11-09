@@ -10,11 +10,21 @@ enum Settings {
     private static let hotKeyCodeKey = "hotKeyCode"
     private static let hotKeyModifiersKey = "hotKeyModifiers"
     private static let hotKeyLabelKey = "hotKeyLabel"
+    private static let statusItemRightKey = "statusItemAtRightEdge"
 
     /// How many clips to keep. `0` means no limit, which is the default.
     static var retentionLimit: Int {
         get { defaults.object(forKey: retentionKey) as? Int ?? 0 }
         set { defaults.set(newValue, forKey: retentionKey) }
+    }
+
+    /// When true, the menu-bar icon sits at the far right of the menu bar.
+    static var statusItemAtRightEdge: Bool {
+        get { defaults.bool(forKey: statusItemRightKey) }
+        set {
+            defaults.set(newValue, forKey: statusItemRightKey)
+            NotificationCenter.default.post(name: .statusItemPositionDidChange, object: nil)
+        }
     }
 
     /// The shortcut that opens the clipboard history.
@@ -85,4 +95,5 @@ struct HotKeyCombo: Equatable {
 
 extension Notification.Name {
     static let hotKeyDidChange = Notification.Name("hotKeyDidChange")
+    static let statusItemPositionDidChange = Notification.Name("statusItemPositionDidChange")
 }

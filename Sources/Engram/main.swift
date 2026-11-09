@@ -14,11 +14,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installStatusItem()
         openStore()
         registerHotKey()
+        applyStatusItemPosition(restartMenuBar: false)
 
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(registerHotKey),
             name: .hotKeyDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(refreshStatusItemPosition),
+            name: .statusItemPositionDidChange,
             object: nil
         )
     }
@@ -103,6 +110,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !registered {
             NSLog("Engram: \(combo.displayString) is already taken; pick another shortcut in Settings")
+        }
+    }
+
+    // MARK: - Status item position
+
+    /// The anchor the icon is placed immediately before when "right edge" is on.
+    /// Control Center is the first system icon at the right of the menu bar, so this
+    /// puts Engram as far right as a third-party icon can go. Change it (e.g. to the
+    /// clock's bundle id) if a different spot is wanted.
+    private static let rightEdgeAnchor = "com.apple.controlcenter"
+
+    @objc private func refreshStatusItemPosition() {
+        applyStatusItemPosition(restartMenuBar: true)
+    }
+
+    /// Menu-bar icon ordering has no public API. It lives in the systemuiserver
+    /// preference domain under "NSStatusItem Preferred Position <bundle>", so writing
+    /// that key (and restarting SystemUIServer to reload it) is the only way to move
+    /// the icon. Removing the key returns it to its default position.
+    private func applyStatusItemPosition(restartMenuBar: Bool) {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.engram.app"
+        let key = "NSStatusItem Preferred Position \(bundleID)"
+
+        if Settings.statusItemAtRightEdge {
+            run("/usr/bin/defaults", ["write", "com.apple.systemuiserver", key, "-string", Self.rightEdgeAnchor])
+        } else {
+            run("/usr/bin/defaults", ["delete", "com.apple.systemuiserver", key])
+        }
+
+        if restartMenuBar {
+            run("/usr/bin/killall", ["SystemUIServer"])
+        }
+    }
+
+    private func run(_ executable: String, _ arguments: [String]) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            NSLog("Engram: could not run \(executable): \(error.localizedDescription)")
         }
     }
 

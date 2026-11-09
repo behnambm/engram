@@ -7,16 +7,28 @@ final class HistoryWindowController: NSWindowController {
     /// Only one page is ever loaded, so opening and filtering stay ~1 ms no matter how
     /// large the history is.
     private static let displayLimit = 200
-
-    /// Inset from the top of the window that clears the traffic-light buttons under a
-    /// transparent titlebar (the content extends up into the titlebar area).
-    private static let titleBarInset: CGFloat = 44
+    private static let titleBarHeight: CGFloat = 46
+    private static let searchTopInset: CGFloat = 61
+    private static let searchHeight: CGFloat = 43
+    private static let rowHeight: CGFloat = 36
 
     private let store: ClipStore
-    private let searchField = NSSearchField()
+    private let titleLabel = NSTextField(labelWithString: "Engram — Clipboard History")
+    private let searchContainer = NSView()
+    private let searchField = NSTextField()
     private let tableView = HistoryTableView()
     private let emptyLabel = NSTextField(labelWithString: "No clips yet — copy something first")
     private let statusLabel = NSTextField(labelWithString: "")
+
+    fileprivate enum Palette {
+        static let background = NSColor(calibratedRed: 0.086, green: 0.090, blue: 0.184, alpha: 1)
+        static let searchBackground = NSColor(calibratedRed: 0.176, green: 0.184, blue: 0.298, alpha: 1)
+        static let searchBorder = NSColor(calibratedRed: 0.42, green: 0.43, blue: 0.58, alpha: 1)
+        static let divider = NSColor(calibratedRed: 0.204, green: 0.208, blue: 0.298, alpha: 1)
+        static let selectedRow = NSColor(calibratedRed: 0.145, green: 0.176, blue: 0.353, alpha: 1)
+        static let primaryText = NSColor(calibratedRed: 0.941, green: 0.941, blue: 0.969, alpha: 1)
+        static let secondaryText = NSColor(calibratedRed: 0.56, green: 0.565, blue: 0.635, alpha: 1)
+    }
     private var clips: [Clip] = []
 
     /// The app that was frontmost before this window opened. A menu-bar agent keeps
@@ -27,18 +39,20 @@ final class HistoryWindowController: NSWindowController {
     init(store: ClipStore) {
         self.store = store
         super.init(window: NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 540, height: 480),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 310),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         ))
-        window?.title = "Clipboard History"
+        window?.title = "Engram — Clipboard History"
         window?.titlebarAppearsTransparent = true
         window?.titleVisibility = .hidden
         window?.isMovableByWindowBackground = true
-        window?.backgroundColor = .clear
-        window?.isOpaque = false
+        window?.backgroundColor = Palette.background
+        window?.appearance = NSAppearance(named: .darkAqua)
+        window?.isOpaque = true
         window?.isReleasedWhenClosed = false
+        window?.minSize = NSSize(width: 430, height: 280)
         window?.center()
         window?.contentView = makeContentView()
         window?.delegate = self
@@ -74,29 +88,45 @@ final class HistoryWindowController: NSWindowController {
 
     private func makeContentView() -> NSView {
         let root = NSView()
+        root.wantsLayer = true
+        root.layer?.backgroundColor = Palette.background.cgColor
 
-        // Translucent, content-area material that lets the desktop show through — the
-        // frosted-glass chrome System Settings and Notes use for their surfaces.
-        let material = NSVisualEffectView()
-        material.material = .popover
-        material.blendingMode = .behindWindow
-        material.state = .active
-        material.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(material)
+        titleLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        titleLabel.textColor = Palette.secondaryText
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        searchContainer.wantsLayer = true
+        searchContainer.layer?.backgroundColor = Palette.searchBackground.cgColor
+        searchContainer.layer?.cornerRadius = 14
+        searchContainer.layer?.borderWidth = 1.4
+        searchContainer.layer?.borderColor = Palette.searchBorder.cgColor
+        searchContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        // A plain NSTextField: the rounded container already draws the border, so a
+        // bezelled NSSearchField would add a second bezel plus an orphaned magnifier and
+        // cancel button that the container's own border would fight with.
         searchField.placeholderString = "Search history"
         searchField.controlSize = .large
+        searchField.font = .systemFont(ofSize: 18)
+        searchField.textColor = Palette.primaryText
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
+        searchField.focusRingType = .none
+        searchField.isBezeled = false
+        searchField.isBordered = false
+        searchField.drawsBackground = false
+        searchField.backgroundColor = .clear
+        searchField.usesSingleLineMode = true
+        searchContainer.addSubview(searchField)
 
         tableView.headerView = nil
-        tableView.rowHeight = 46
+        tableView.rowHeight = Self.rowHeight
+        tableView.intercellSpacing = NSSize(width: 0, height: 2)
         tableView.allowsMultipleSelection = false
         tableView.allowsEmptySelection = true
         tableView.usesAlternatingRowBackgroundColors = false
         tableView.backgroundColor = .clear
-        tableView.gridStyleMask = .solidHorizontalGridLineMask
-        tableView.gridColor = .separatorColor
+        tableView.gridStyleMask = []
         tableView.target = self
         tableView.action = #selector(rowClicked)
         tableView.onActivate = { [weak self] in self?.copySelected() }
@@ -115,46 +145,53 @@ final class HistoryWindowController: NSWindowController {
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-        emptyLabel.textColor = .secondaryLabelColor
-        emptyLabel.font = .systemFont(ofSize: 13)
+        emptyLabel.textColor = Palette.secondaryText
+        emptyLabel.font = .systemFont(ofSize: 14)
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        statusLabel.font = .systemFont(ofSize: 11)
-        statusLabel.textColor = .tertiaryLabelColor
+        statusLabel.font = .systemFont(ofSize: 13)
+        statusLabel.textColor = Palette.secondaryText
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        let divider = NSBox()
-        divider.boxType = .separator
+        let divider = NSView()
+        divider.wantsLayer = true
+        divider.layer?.backgroundColor = Palette.divider.cgColor
         divider.translatesAutoresizingMaskIntoConstraints = false
+        divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
 
-        root.addSubview(searchField)
+        root.addSubview(titleLabel)
+        root.addSubview(searchContainer)
         root.addSubview(divider)
         root.addSubview(scrollView)
         root.addSubview(statusLabel)
         root.addSubview(emptyLabel)
 
         NSLayoutConstraint.activate([
-            material.topAnchor.constraint(equalTo: root.topAnchor),
-            material.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            material.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            material.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 85),
+            titleLabel.centerYAnchor.constraint(equalTo: root.topAnchor, constant: Self.titleBarHeight / 2),
 
-            searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: Self.titleBarInset),
-            searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
-            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            searchContainer.topAnchor.constraint(equalTo: root.topAnchor, constant: Self.searchTopInset),
+            searchContainer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 17),
+            searchContainer.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -17),
+            searchContainer.heightAnchor.constraint(equalToConstant: Self.searchHeight),
 
-            divider.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 12),
+            searchField.leadingAnchor.constraint(equalTo: searchContainer.leadingAnchor, constant: 8),
+            searchField.trailingAnchor.constraint(equalTo: searchContainer.trailingAnchor, constant: -8),
+            searchField.topAnchor.constraint(equalTo: searchContainer.topAnchor, constant: 4),
+            searchField.bottomAnchor.constraint(equalTo: searchContainer.bottomAnchor, constant: -4),
+
+            divider.topAnchor.constraint(equalTo: root.topAnchor, constant: Self.titleBarHeight),
             divider.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             divider.trailingAnchor.constraint(equalTo: root.trailingAnchor),
 
-            scrollView.topAnchor.constraint(equalTo: divider.bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -24),
+            scrollView.topAnchor.constraint(equalTo: searchContainer.bottomAnchor, constant: 8),
+            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 9),
+            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -9),
+            scrollView.bottomAnchor.constraint(equalTo: statusLabel.topAnchor, constant: -8),
 
-            statusLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
-            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -16),
-            statusLabel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -8),
+            statusLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 29),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
+            statusLabel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
@@ -181,22 +218,18 @@ final class HistoryWindowController: NSWindowController {
                 : "No matches"
         }
 
-        updateStatus(query: query)
+        updateStatus(for: query)
     }
 
-    /// The window chrome is transparent now, so the clip count lives in a quiet status
-    /// line at the bottom instead of a title — it reads as a status bar, not a header.
-    private func updateStatus(query: String) {
-        guard !clips.isEmpty else {
-            statusLabel.isHidden = true
-            return
-        }
-
-        if query.isEmpty {
-            let total = store.count
-            statusLabel.stringValue = "\(total) clip\(total == 1 ? "" : "s")"
+    /// Bottom status: total count normally, match info while a query is active.
+    private func updateStatus(for query: String) {
+        let total = store.count
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            statusLabel.stringValue = "\(total.formatted()) clip\(total == 1 ? "" : "s")"
         } else {
-            statusLabel.stringValue = "\(clips.count) match\(clips.count == 1 ? "" : "es")"
+            let matches = store.matchCount(trimmed)
+            statusLabel.stringValue = "\(matches.formatted()) of \(total.formatted())"
         }
         statusLabel.isHidden = false
     }
@@ -231,7 +264,7 @@ final class HistoryWindowController: NSWindowController {
     }
 }
 
-extension HistoryWindowController: NSSearchFieldDelegate {
+extension HistoryWindowController: NSTextFieldDelegate {
     func controlTextDidChange(_ notification: Notification) {
         reload()
     }
@@ -305,26 +338,25 @@ private final class HistoryTableView: NSTableView {
     }
 }
 
-/// A selected row drawn as a rounded, accent-tinted pill instead of a full-width
-/// square — the selection style Spotlight and System Settings use for their lists.
+/// A selected row drawn as a rounded indigo pill to match the history window palette.
 @MainActor
 private final class HistoryRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {
         guard selectionHighlightStyle != .none else { return }
-        let color = isEmphasized
-            ? NSColor.selectedContentBackgroundColor
-            : NSColor.unemphasizedSelectedContentBackgroundColor
-        color.setFill()
+        let base = HistoryWindowController.Palette.selectedRow
+        // A non-key window keeps the row selected but dims the pill, so the active
+        // window's selection is visually distinct.
+        let fill = isEmphasized ? base : base.withAlphaComponent(0.45)
+        fill.setFill()
         NSBezierPath(
-            roundedRect: bounds.insetBy(dx: 8, dy: 2),
-            xRadius: 8,
-            yRadius: 8
+            roundedRect: bounds.insetBy(dx: 8, dy: 0),
+            xRadius: 12,
+            yRadius: 12
         ).fill()
     }
 }
 
-/// Recolours its two-tone text (preview + app + time) when the row becomes selected,
-/// so dark text never sits on the accent highlight.
+/// Renders clip preview with compact source and timestamp metadata.
 @MainActor
 private final class HistoryCellView: NSTableCellView {
     private let clip: Clip
@@ -338,18 +370,27 @@ private final class HistoryCellView: NSTableCellView {
         return formatter
     }()
 
+    private static func shortTimestamp(for date: Date) -> String {
+        let seconds = max(0, Int(Date().timeIntervalSince(date)))
+        if seconds < 60 { return seconds == 0 ? "now" : "\(seconds)s" }
+        if seconds < 3_600 { return "\(seconds / 60)m" }
+        if seconds < 86_400 { return "\(seconds / 3_600)h" }
+        if seconds < 604_800 { return "\(seconds / 86_400)d" }
+        return relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+
     init(clip: Clip) {
         self.clip = clip
         super.init(frame: .zero)
 
-        textLabel.lineBreakMode = .byWordWrapping
-        textLabel.usesSingleLineMode = false
-        textLabel.maximumNumberOfLines = 2
+        textLabel.lineBreakMode = .byTruncatingTail
+        textLabel.usesSingleLineMode = true
+        textLabel.maximumNumberOfLines = 1
         textLabel.toolTip = clip.text
         textLabel.translatesAutoresizingMaskIntoConstraints = false
         textLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        timeLabel.font = .systemFont(ofSize: 11)
+        timeLabel.font = .systemFont(ofSize: 13)
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         timeLabel.setContentHuggingPriority(.required, for: .horizontal)
         timeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -380,30 +421,19 @@ private final class HistoryCellView: NSTableCellView {
 
     private func render() {
         let emphasized = backgroundStyle == .emphasized
-        let primary = emphasized ? NSColor.selectedControlTextColor : NSColor.labelColor
+        let primary = HistoryWindowController.Palette.primaryText
         let secondary = emphasized
-            ? NSColor.selectedControlTextColor.withAlphaComponent(0.7)
-            : NSColor.secondaryLabelColor
-        let tertiary = emphasized
-            ? NSColor.selectedControlTextColor.withAlphaComponent(0.55)
-            : NSColor.tertiaryLabelColor
+            ? HistoryWindowController.Palette.primaryText.withAlphaComponent(0.72)
+            : HistoryWindowController.Palette.secondaryText
 
-        let text = NSMutableAttributedString(
+        textLabel.attributedStringValue = NSAttributedString(
             string: clip.preview,
-            attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: primary]
+            attributes: [.font: NSFont.systemFont(ofSize: 16), .foregroundColor: primary]
         )
-        if let appName = clip.appName {
-            text.append(NSAttributedString(
-                string: "  ·  \(appName)",
-                attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: secondary]
-            ))
-        }
-        textLabel.attributedStringValue = text
 
-        timeLabel.textColor = tertiary
-        timeLabel.stringValue = Self.relativeFormatter.localizedString(
-            for: clip.createdAt,
-            relativeTo: Date()
-        )
+        let age = Self.shortTimestamp(for: clip.createdAt)
+        timeLabel.stringValue = [clip.appName, age].compactMap { $0 }.joined(separator: " · ")
+        timeLabel.textColor = secondary
+        timeLabel.font = .systemFont(ofSize: 14)
     }
 }

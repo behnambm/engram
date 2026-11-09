@@ -6,6 +6,7 @@ import AppKit
 final class SettingsWindowController: NSWindowController {
     private let store: ClipStore
     private let launchAtLoginSwitch = NSSwitch()
+    private let rightEdgeSwitch = NSSwitch()
     private let retentionPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let hotKeyButton = ShortcutRecorderButton()
 
@@ -22,7 +23,7 @@ final class SettingsWindowController: NSWindowController {
     init(store: ClipStore) {
         self.store = store
         super.init(window: NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 320),
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -33,6 +34,10 @@ final class SettingsWindowController: NSWindowController {
         window?.isMovableByWindowBackground = true
         window?.backgroundColor = .clear
         window?.isOpaque = false
+        // Match the history window's forced dark appearance so both surfaces read as
+        // one dark product. System control colors flip to their dark variants, keeping
+        // every label and control legible on the dark popover material.
+        window?.appearance = NSAppearance(named: .darkAqua)
         window?.isReleasedWhenClosed = false
         window?.center()
         window?.contentView = makeContentView()
@@ -69,6 +74,9 @@ final class SettingsWindowController: NSWindowController {
         launchAtLoginSwitch.target = self
         launchAtLoginSwitch.action = #selector(toggleLaunchAtLogin)
 
+        rightEdgeSwitch.target = self
+        rightEdgeSwitch.action = #selector(toggleRightEdge)
+
         retentionPopup.addItems(withTitles: Self.retentionChoices.map(\.title))
         retentionPopup.target = self
         retentionPopup.action = #selector(changeRetention)
@@ -91,6 +99,8 @@ final class SettingsWindowController: NSWindowController {
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         addFormRow(to: stack, title: "Start at login", control: launchAtLoginSwitch)
+        addDivider(to: stack)
+        addFormRow(to: stack, title: "Menu bar icon at right edge", control: rightEdgeSwitch)
         addDivider(to: stack)
         addFormRow(to: stack, title: "History retention", control: retentionPopup)
         addDivider(to: stack)
@@ -146,6 +156,8 @@ final class SettingsWindowController: NSWindowController {
             ? "Allow Engram in System Settings → General → Login Items"
             : nil
 
+        rightEdgeSwitch.state = Settings.statusItemAtRightEdge ? .on : .off
+
         let limit = Settings.retentionLimit
         let index = Self.retentionChoices.firstIndex { $0.limit == limit } ?? 0
         retentionPopup.selectItem(at: index)
@@ -159,6 +171,11 @@ final class SettingsWindowController: NSWindowController {
         } catch {
             presentError("Could not change the login item", error)
         }
+        refreshControls()
+    }
+
+    @objc private func toggleRightEdge() {
+        Settings.statusItemAtRightEdge = rightEdgeSwitch.state == .on
         refreshControls()
     }
 
