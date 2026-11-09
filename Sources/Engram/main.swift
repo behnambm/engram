@@ -14,18 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installStatusItem()
         openStore()
         registerHotKey()
-        applyStatusItemPosition(restartMenuBar: false)
 
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(registerHotKey),
             name: .hotKeyDidChange,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(refreshStatusItemPosition),
-            name: .statusItemPositionDidChange,
             object: nil
         )
     }
@@ -36,9 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = item.button {
-            let icon = NSImage(systemSymbolName: "brain", accessibilityDescription: "Engram")
-            icon?.isTemplate = true
-            button.image = icon
+            button.image = Self.makeMenuBarIcon()
+            button.imagePosition = .imageOnly
             button.toolTip = "Engram"
             button.target = self
             button.action = #selector(handleClick)
@@ -46,6 +38,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         statusItem = item
+    }
+
+    /// The brain glyph with a status dot at its bottom-right. The brain is always white
+    /// (it reads on a dark menu bar); the dot is green while recording and red while
+    /// paused.
+    private static func makeMenuBarIcon() -> NSImage {
+        let canvas = NSSize(width: 22, height: 22)
+        let brainColor: NSColor = .white
+
+        let image = NSImage(size: canvas)
+        image.lockFocus()
+
+        if let brain = NSImage(systemSymbolName: "brain", accessibilityDescription: nil) {
+            brain.isTemplate = false
+            let brainSize = NSSize(width: 18, height: 18)
+            let brainRect = NSRect(
+                x: (canvas.width - brainSize.width) / 2,
+                y: (canvas.height - brainSize.height) / 2,
+                width: brainSize.width,
+                height: brainSize.height
+            )
+            brain.tinted(with: brainColor).draw(in: brainRect, from: .zero, operation: .sourceOver, fraction: 1)
+        }
+
+        let dotColor: NSColor = Settings.isPaused
+            ? .systemRed
+            : NSColor(calibratedRed: 0.22, green: 1.0, blue: 0.08, alpha: 1)  // neon green
+        dotColor.setFill()
+        let dotDiameter: CGFloat = 6
+        let dot = NSRect(
+            x: canvas.width - dotDiameter - 1,
+            y: 1,
+            width: dotDiameter,
+            height: dotDiameter
+        )
+        NSBezierPath(ovalIn: dot).fill()
+
+        image.unlockFocus()
+        return image
     }
 
     @objc private func handleClick() {
@@ -66,6 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipboard.target = self
         menu.addItem(clipboard)
 
+        let pause = NSMenuItem(title: Settings.isPaused ? "Unpause" : "Pause", action: #selector(togglePause), keyEquivalent: "")
+        pause.target = self
+        menu.addItem(pause)
+
         let settings = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -76,7 +111,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quit.target = self
         menu.addItem(quit)
 
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+        // Show as a context menu anchored to the button, so macOS positions it below the
+        // icon at the correct screen spot instead of a hand-computed offset.
+        if let event = NSApp.currentEvent {
+            NSMenu.popUpContextMenu(menu, with: event, for: button)
+        } else {
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+        }
+    }
+
+    /// Toggles clipboard recording on/off and updates the menu-bar dot (green = recording,
+    /// red = paused). The watcher checks `Settings.isPaused` before every capture.
+    @objc private func togglePause() {
+        Settings.isPaused.toggle()
+        statusItem?.button?.image = Self.makeMenuBarIcon()
     }
 
     // MARK: - Clipboard history
@@ -113,56 +161,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Status item position
-
-    /// The anchor the icon is placed immediately before when "right edge" is on.
-    /// Control Center is the first system icon at the right of the menu bar, so this
-    /// puts Engram as far right as a third-party icon can go. Change it (e.g. to the
-    /// clock's bundle id) if a different spot is wanted.
-    private static let rightEdgeAnchor = "com.apple.controlcenter"
-
-    @objc private func refreshStatusItemPosition() {
-        applyStatusItemPosition(restartMenuBar: true)
-    }
-
-    /// Menu-bar icon ordering has no public API. It lives in the systemuiserver
-    /// preference domain under "NSStatusItem Preferred Position <bundle>", so writing
-    /// that key (and restarting SystemUIServer to reload it) is the only way to move
-    /// the icon. Removing the key returns it to its default position.
-    private func applyStatusItemPosition(restartMenuBar: Bool) {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.engram.app"
-        let key = "NSStatusItem Preferred Position \(bundleID)"
-
-        if Settings.statusItemAtRightEdge {
-            run("/usr/bin/defaults", ["write", "com.apple.systemuiserver", key, "-string", Self.rightEdgeAnchor])
-        } else {
-            run("/usr/bin/defaults", ["delete", "com.apple.systemuiserver", key])
-        }
-
-        if restartMenuBar {
-            run("/usr/bin/killall", ["SystemUIServer"])
-        }
-    }
-
-    private func run(_ executable: String, _ arguments: [String]) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            NSLog("Engram: could not run \(executable): \(error.localizedDescription)")
-        }
-    }
-
     @objc private func showHistory() {
         guard let store else { return }
 
         if historyWindow == nil {
             historyWindow = HistoryWindowController(store: store)
         }
-        historyWindow?.present()
+        // Present on the next run-loop turn so the menu (if this came from a right-click)
+        // has closed and the window can actually become key.
+        DispatchQueue.main.async { [weak self] in
+            self?.historyWindow?.present()
+        }
     }
 
     @objc private func openSettings() {
@@ -171,7 +180,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settingsWindow == nil {
             settingsWindow = SettingsWindowController(store: store)
         }
-        settingsWindow?.present()
+        // Present on the next run-loop turn so the menu has closed and the window can
+        // actually become key (otherwise it opens behind the previously focused app).
+        DispatchQueue.main.async { [weak self] in
+            self?.settingsWindow?.present()
+        }
     }
 
     @objc private func quit() {
@@ -184,3 +197,18 @@ let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()
+
+extension NSImage {
+    /// Returns a copy of the image tinted with `color`. Works for template symbols too:
+    /// the shape is filled with `color` while its alpha is preserved.
+    func tinted(with color: NSColor) -> NSImage {
+        let result = NSImage(size: size)
+        result.lockFocus()
+        let rect = NSRect(origin: .zero, size: size)
+        draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+        color.set()
+        rect.fill(using: .sourceAtop)
+        result.unlockFocus()
+        return result
+    }
+}

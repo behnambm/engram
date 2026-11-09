@@ -52,6 +52,10 @@ final class ClipboardWatcher {
         guard pasteboard.changeCount != lastChangeCount else { return }
         lastChangeCount = pasteboard.changeCount
 
+        // While paused, keep the change counter in sync but record nothing, so a clip
+        // copied during the pause is never captured after unpausing.
+        guard !Settings.isPaused else { return }
+
         guard let types = pasteboard.types else { return }
         guard types.allSatisfy({ !Self.ignoredTypes.contains($0.rawValue) }) else { return }
         guard let text = pasteboard.string(forType: .string) else { return }

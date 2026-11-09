@@ -6,7 +6,6 @@ import AppKit
 final class SettingsWindowController: NSWindowController {
     private let store: ClipStore
     private let launchAtLoginSwitch = NSSwitch()
-    private let rightEdgeSwitch = NSSwitch()
     private let retentionPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let hotKeyButton = ShortcutRecorderButton()
 
@@ -73,9 +72,6 @@ final class SettingsWindowController: NSWindowController {
         launchAtLoginSwitch.target = self
         launchAtLoginSwitch.action = #selector(toggleLaunchAtLogin)
 
-        rightEdgeSwitch.target = self
-        rightEdgeSwitch.action = #selector(toggleRightEdge)
-
         retentionPopup.addItems(withTitles: Self.retentionChoices.map(\.title))
         retentionPopup.target = self
         retentionPopup.action = #selector(changeRetention)
@@ -98,8 +94,6 @@ final class SettingsWindowController: NSWindowController {
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         addFormRow(to: stack, title: "Start at login", control: launchAtLoginSwitch)
-        addDivider(to: stack)
-        addFormRow(to: stack, title: "Menu bar icon at right edge", control: rightEdgeSwitch)
         addDivider(to: stack)
         addFormRow(to: stack, title: "History retention", control: retentionPopup)
         addDivider(to: stack)
@@ -155,8 +149,6 @@ final class SettingsWindowController: NSWindowController {
             ? "Allow Engram in System Settings → General → Login Items"
             : nil
 
-        rightEdgeSwitch.state = Settings.statusItemAtRightEdge ? .on : .off
-
         let limit = Settings.retentionLimit
         let index = Self.retentionChoices.firstIndex { $0.limit == limit } ?? 0
         retentionPopup.selectItem(at: index)
@@ -170,11 +162,6 @@ final class SettingsWindowController: NSWindowController {
         } catch {
             presentError("Could not change the login item", error)
         }
-        refreshControls()
-    }
-
-    @objc private func toggleRightEdge() {
-        Settings.statusItemAtRightEdge = rightEdgeSwitch.state == .on
         refreshControls()
     }
 
