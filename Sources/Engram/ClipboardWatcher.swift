@@ -29,6 +29,7 @@ final class ClipboardWatcher {
 
     private static let checkInterval: TimeInterval = 0.5
     private static let maximumTextBytes = 1_000_000
+    private static let maximumImageBytes = 25_000_000
 
     init(store: ClipStore) {
         self.store = store
@@ -58,10 +59,19 @@ final class ClipboardWatcher {
 
         guard let types = pasteboard.types else { return }
         guard types.allSatisfy({ !Self.ignoredTypes.contains($0.rawValue) }) else { return }
-        guard let text = pasteboard.string(forType: .string) else { return }
-        guard text.utf8.count <= Self.maximumTextBytes else { return }
 
         let app = NSWorkspace.shared.frontmostApplication
-        try? store.insert(text: text, appName: app?.localizedName, appBundle: app?.bundleIdentifier)
+
+        // Text takes precedence; an image is recorded only when there is no text.
+        if let text = pasteboard.string(forType: .string), !text.isEmpty {
+            guard text.utf8.count <= Self.maximumTextBytes else { return }
+            try? store.insert(text: text, appName: app?.localizedName, appBundle: app?.bundleIdentifier)
+            return
+        }
+
+        if let imageData = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff) {
+            guard imageData.count <= Self.maximumImageBytes else { return }
+            try? store.insert(text: "", appName: app?.localizedName, appBundle: app?.bundleIdentifier, imageData: imageData)
+        }
     }
 }

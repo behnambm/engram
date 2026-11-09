@@ -5,9 +5,13 @@ import SQLite3
 struct Clip: Identifiable {
     let id: Int64
     let text: String
+    let imageData: Data?
     let appName: String?
     let appBundle: String?
     let createdAt: Date
+
+    /// `true` when this clip is an image rather than text.
+    var isImage: Bool { imageData != nil }
 
     /// A short version for the list: newlines and runs of whitespace collapsed, and
     /// capped so one long clip cannot become a wall of text in a single row. The cell
@@ -58,11 +62,30 @@ final class ClipStore {
                 app_name TEXT,
                 app_bundle TEXT,
                 hash BLOB NOT NULL,
-                text TEXT NOT NULL
+                text TEXT NOT NULL,
+                image_data BLOB
             )
             """)
+        try addImageColumnIfNeeded()
         try execute("CREATE UNIQUE INDEX IF NOT EXISTS clips_hash ON clips(hash)")
         try setUpFullTextSearch()
+    }
+
+    /// Older databases predate `image_data`; add the column in place rather than
+    /// rebuilding the table (which would lose history).
+    private func addImageColumnIfNeeded() throws {
+        let statement = try prepare("PRAGMA table_info(clips)")
+        defer { sqlite3_finalize(statement) }
+        var hasImage = false
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let name = sqlite3_column_text(statement, 1), String(cString: name) == "image_data" {
+                hasImage = true
+                break
+            }
+        }
+        if !hasImage {
+            try execute("ALTER TABLE clips ADD COLUMN image_data BLOB")
+        }
     }
 
     /// FTS5 over `clips.text`, kept in sync by triggers. Existing rows are indexed once,
@@ -110,11 +133,23 @@ final class ClipStore {
 
     // MARK: - Writing
 
-    /// Stores a clip. An identical clip (same hash) is removed first so the new row
-    /// becomes the newest — "bump to top" instead of a duplicate row.
-    func insert(text: String, appName: String?, appBundle: String?) throws {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let hash = Data(SHA256.hash(data: Data(text.utf8)))
+    /// Stores a text clip or an image clip (exactly one of `text`/`imageData` is the
+    /// content). An identical clip (same hash) is removed first so the new row becomes
+    /// the newest — "bump to top" instead of a duplicate row.
+    func insert(text: String, appName: String?, appBundle: String?, imageData: Data? = nil) throws {
+        let content: Data
+        let storedText: String
+        if let imageData {
+            guard !imageData.isEmpty else { return }
+            content = imageData
+            storedText = ""
+        } else {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            content = Data(text.utf8)
+            storedText = text
+        }
+        let hash = Data(SHA256.hash(data: content))
 
         try transaction {
             let delete = try prepare("DELETE FROM clips WHERE hash = ?")
@@ -125,8 +160,8 @@ final class ClipStore {
             sqlite3_finalize(delete)
 
             let insert = try prepare("""
-                INSERT INTO clips(created_at, app_name, app_bundle, hash, text)
-                VALUES(?, ?, ?, ?, ?)
+                INSERT INTO clips(created_at, app_name, app_bundle, hash, text, image_data)
+                VALUES(?, ?, ?, ?, ?, ?)
                 """)
             sqlite3_bind_double(insert, 1, Date().timeIntervalSince1970)
             if let appName { sqlite3_bind_text(insert, 2, appName, -1, Self.transient) }
@@ -134,7 +169,12 @@ final class ClipStore {
             _ = hash.withUnsafeBytes { bytes in
                 sqlite3_bind_blob(insert, 4, bytes.baseAddress, Int32(bytes.count), Self.transient)
             }
-            sqlite3_bind_text(insert, 5, text, -1, Self.transient)
+            sqlite3_bind_text(insert, 5, storedText, -1, Self.transient)
+            if let imageData {
+                _ = imageData.withUnsafeBytes { bytes in
+                    sqlite3_bind_blob(insert, 6, bytes.baseAddress, Int32(bytes.count), Self.transient)
+                }
+            }
             try step(insert)
             sqlite3_finalize(insert)
         }
@@ -183,7 +223,7 @@ final class ClipStore {
     func recent(limit: Int) -> [Clip] {
         guard limit > 0 else { return [] }
         guard let statement = try? prepare("""
-            SELECT id, text, app_name, app_bundle, created_at FROM clips ORDER BY id DESC LIMIT ?
+            SELECT id, text, app_name, app_bundle, image_data, created_at FROM clips ORDER BY id DESC LIMIT ?
             """) else { return [] }
         defer { sqlite3_finalize(statement) }
         sqlite3_bind_int(statement, 1, Int32(limit))
@@ -220,7 +260,7 @@ final class ClipStore {
         // rowid is the copy order, so this stops as soon as it has enough rows (0.03–2 ms
         // at 100k clips) instead of scoring every match (12–25 ms).
         guard let statement = try? prepare("""
-            SELECT c.id, c.text, c.app_name, c.app_bundle, c.created_at
+            SELECT c.id, c.text, c.app_name, c.app_bundle, c.image_data, c.created_at
             FROM clips_fts f JOIN clips c ON c.id = f.rowid
             WHERE clips_fts MATCH ?
             ORDER BY f.rowid DESC
@@ -239,7 +279,7 @@ final class ClipStore {
             .replacingOccurrences(of: "_", with: "\\_")
 
         guard let statement = try? prepare("""
-            SELECT id, text, app_name, app_bundle, created_at FROM clips
+            SELECT id, text, app_name, app_bundle, image_data, created_at FROM clips
             WHERE text LIKE ? ESCAPE '\\'
             ORDER BY id DESC LIMIT ?
             """) else { return [] }
@@ -282,12 +322,18 @@ final class ClipStore {
         var clips: [Clip] = []
         while sqlite3_step(statement) == SQLITE_ROW {
             guard let text = sqlite3_column_text(statement, 1) else { continue }
+            var imageData: Data?
+            if sqlite3_column_type(statement, 4) == SQLITE_BLOB,
+               let bytes = sqlite3_column_blob(statement, 4) {
+                imageData = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 4)))
+            }
             clips.append(Clip(
                 id: sqlite3_column_int64(statement, 0),
                 text: String(cString: text),
+                imageData: imageData,
                 appName: sqlite3_column_text(statement, 2).map { String(cString: $0) },
                 appBundle: sqlite3_column_text(statement, 3).map { String(cString: $0) },
-                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4))
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 5))
             ))
         }
         return clips

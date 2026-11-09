@@ -27,6 +27,9 @@ final class HistoryWindowController: NSWindowController {
     /// the next ⌘V goes nowhere.
     private var previousApp: NSRunningApplication?
 
+    /// The magnified image preview, if currently open.
+    private var previewWindow: ImagePreviewWindowController?
+
     init(store: ClipStore) {
         self.store = store
         super.init(window: NSWindow(
@@ -51,6 +54,14 @@ final class HistoryWindowController: NSWindowController {
         window?.center()
         window?.contentView = makeContentView()
         window?.delegate = self
+
+        // Close the window when the user focuses another app.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidResignActive),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
     }
 
     required init?(coder: NSCoder) {
@@ -239,7 +250,11 @@ final class HistoryWindowController: NSWindowController {
     private func copy(_ clip: Clip) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(clip.text, forType: .string)
+        if let imageData = clip.imageData {
+            pasteboard.setData(imageData, forType: .png)
+        } else {
+            pasteboard.setString(clip.text, forType: .string)
+        }
         window?.close()
     }
 
@@ -264,6 +279,25 @@ final class HistoryWindowController: NSWindowController {
         tableView.scrollRowToVisible(index)
     }
 
+    // MARK: - Image preview
+
+    private func showPreview(for clip: Clip) {
+        guard let data = clip.imageData, let image = NSImage(data: data) else { return }
+        previewWindow?.close()
+        let controller = ImagePreviewWindowController(image: image)
+        controller.onClose = { [weak self] in
+            self?.window?.makeKeyAndOrderFront(nil)
+        }
+        previewWindow = controller
+        controller.present()
+    }
+
+    private func previewSelectedImage() {
+        let row = tableView.selectedRow
+        guard clips.indices.contains(row), clips[row].isImage else { return }
+        showPreview(for: clips[row])
+    }
+
     /// Scrolling moves rows under a stationary cursor without a mouse-moved event, so a
     /// trash button would linger on the row the pointer already left. Reset hover on every
     /// visible row whenever the clip view scrolls.
@@ -275,6 +309,14 @@ final class HistoryWindowController: NSWindowController {
                 cell.resetHover()
             }
         }
+    }
+
+    /// Close the history when the user focuses another app. Drop the previous-app handoff
+    /// first, so we don't steal focus back after the user deliberately switched away.
+    @objc private func appDidResignActive() {
+        guard window?.isVisible == true else { return }
+        previousApp = nil
+        window?.close()
     }
 }
 
@@ -308,6 +350,14 @@ extension HistoryWindowController: NSSearchFieldDelegate {
                 return true
             }
             return false
+        case #selector(NSResponder.moveRight(_:)):
+            // Right arrow opens the image preview (like Quick Look); while typing it still
+            // moves the text cursor.
+            if searchField.stringValue.isEmpty {
+                previewSelectedImage()
+                return true
+            }
+            return false
         default:
             return false
         }
@@ -324,7 +374,8 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
         return HistoryCellView(
             clip: clip,
             onDelete: { [weak self] in self?.deleteClip(clip) },
-            onHoverEnter: { [weak self] in self?.selectClip(clip) }
+            onHoverEnter: { [weak self] in self?.selectClip(clip) },
+            onPreview: { [weak self] in self?.showPreview(for: clip) }
         )
     }
 }
@@ -361,25 +412,31 @@ private final class HistoryTableView: NSTableView {
     }
 }
 
-/// A borderless trash button whose hover ring is a true circle. The ring is a circular
+/// A borderless icon button whose hover ring is a true circle. The ring is a circular
 /// `CAShapeLayer` path (not a rounded-rect border), so it can never stretch into an oval
-/// no matter how the button is sized.
+/// no matter how the button is sized. The icon and its ring share one color.
 @MainActor
-private final class TrashButton: NSButton {
+private final class RingButton: NSButton {
     private let ringLayer = CAShapeLayer()
 
     var showsRing = false {
         didSet { ringLayer.isHidden = !showsRing }
     }
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+    init(symbolName: String, ringColor: NSColor) {
+        super.init(frame: .zero)
         wantsLayer = true
         ringLayer.fillColor = nil
-        ringLayer.strokeColor = NSColor.systemRed.cgColor
+        ringLayer.strokeColor = ringColor.cgColor
         ringLayer.lineWidth = 1.0
         ringLayer.isHidden = true
         layer?.addSublayer(ringLayer)
+
+        isBordered = false
+        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+        image?.isTemplate = true
+        self.image = image
+        contentTintColor = ringColor
     }
 
     required init?(coder: NSCoder) {
@@ -400,22 +457,28 @@ private final class TrashButton: NSButton {
     }
 }
 
-/// Renders the clip as a two-line row: the source app's icon on the left, the preview
-/// on the first line, and "App · time ago" on the second.
+/// Renders the clip as a two-line row. Text clips show the source app's icon and the
+/// preview; image clips show a thumbnail and an "Image" label, plus an eye button that
+/// opens a magnified preview.
 ///
 /// Selection uses the table view's native `.inset` style (system accent color, rounded
 /// corners), so this cell only supplies semantic label colors that adapt to light/dark
-/// and flip to white when the row is selected. App icons are full-color and stay
-/// unchanged on selection, exactly as Spotlight shows them.
+/// and flip to white when the row is selected. Icons and thumbnails are full-color and
+/// stay unchanged on selection, exactly as Spotlight shows them.
 @MainActor
 private final class HistoryCellView: NSTableCellView {
     private let clip: Clip
     private let onDelete: (@MainActor () -> Void)
     private let onHoverEnter: (@MainActor () -> Void)
-    private let iconView = NSImageView()
+    private let onPreview: (@MainActor () -> Void)
+    private let leadingImageView = NSImageView()
     private let textLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
-    private let trashButton = TrashButton()
+    private let trashButton = RingButton(symbolName: "trash.fill", ringColor: .systemRed)
+    private let eyeButton = RingButton(symbolName: "eye.fill", ringColor: .systemBlue)
+
+    private var smallSizeConstraints: [NSLayoutConstraint] = []
+    private var largeSizeConstraints: [NSLayoutConstraint] = []
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -424,9 +487,12 @@ private final class HistoryCellView: NSTableCellView {
         return formatter
     }()
 
-    /// Resolving an icon is a disk lookup, so cache by bundle id. Cells are rebuilt on
-    /// every filter, but the cache persists for the window's lifetime.
+    /// Resolving an app icon is a disk lookup, so cache by bundle id. Cells are rebuilt
+    /// on every filter, but the cache persists for the window's lifetime.
     private static var iconCache: [String: NSImage] = [:]
+
+    /// Decoded thumbnails are cached by clip id so filtering does not re-decode images.
+    private static var thumbnailCache: [Int64: NSImage] = [:]
 
     private static func appIcon(for bundleID: String) -> NSImage {
         if let cached = iconCache[bundleID] { return cached }
@@ -435,6 +501,29 @@ private final class HistoryCellView: NSTableCellView {
             ?? NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)!
         iconCache[bundleID] = icon
         return icon
+    }
+
+    private static func thumbnail(for clip: Clip) -> NSImage? {
+        guard let data = clip.imageData else { return nil }
+        if let cached = thumbnailCache[clip.id] { return cached }
+        guard let full = NSImage(data: data) else { return nil }
+        // Downscale to a small square so caching every visible image stays cheap.
+        let side: CGFloat = 60
+        let thumb = NSImage(size: NSSize(width: side, height: side))
+        thumb.lockFocus()
+        let imageSize = full.size
+        let scale = min(side / max(imageSize.width, 1), side / max(imageSize.height, 1))
+        let w = imageSize.width * scale
+        let h = imageSize.height * scale
+        full.draw(
+            in: NSRect(x: (side - w) / 2, y: (side - h) / 2, width: w, height: h),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1
+        )
+        thumb.unlockFocus()
+        thumbnailCache[clip.id] = thumb
+        return thumb
     }
 
     private static func shortTimestamp(for date: Date) -> String {
@@ -446,14 +535,21 @@ private final class HistoryCellView: NSTableCellView {
         return relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 
-    init(clip: Clip, onDelete: @escaping @MainActor () -> Void, onHoverEnter: @escaping @MainActor () -> Void) {
+    init(
+        clip: Clip,
+        onDelete: @escaping @MainActor () -> Void,
+        onHoverEnter: @escaping @MainActor () -> Void,
+        onPreview: @escaping @MainActor () -> Void
+    ) {
         self.clip = clip
         self.onDelete = onDelete
         self.onHoverEnter = onHoverEnter
+        self.onPreview = onPreview
         super.init(frame: .zero)
 
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        iconView.imageScaling = .scaleProportionallyUpOrDown
+        leadingImageView.translatesAutoresizingMaskIntoConstraints = false
+        leadingImageView.imageScaling = .scaleProportionallyUpOrDown
+        leadingImageView.wantsLayer = true
 
         textLabel.lineBreakMode = .byTruncatingTail
         textLabel.usesSingleLineMode = true
@@ -468,20 +564,11 @@ private final class HistoryCellView: NSTableCellView {
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
         detailLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        // A borderless, red trash button revealed on hover.
-        let trashImage = NSImage(systemSymbolName: "trash.fill", accessibilityDescription: "Delete clip")
-        trashImage?.isTemplate = true
-        trashButton.image = trashImage
-        trashButton.isBordered = false
-        trashButton.contentTintColor = .systemRed
         trashButton.toolTip = "Delete clip"
         trashButton.target = self
         trashButton.action = #selector(deleteTapped)
         trashButton.isHidden = true
         trashButton.translatesAutoresizingMaskIntoConstraints = false
-
-        // Scoped to the button so the red ring and hand cursor appear only while the
-        // pointer is over the trash icon, even though the button is usually hidden.
         trashButton.addTrackingArea(NSTrackingArea(
             rect: .zero,
             options: [.mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
@@ -489,17 +576,37 @@ private final class HistoryCellView: NSTableCellView {
             userInfo: ["kind": "trash"]
         ))
 
-        addSubview(iconView)
+        eyeButton.toolTip = "Preview"
+        eyeButton.target = self
+        eyeButton.action = #selector(previewTapped)
+        eyeButton.isHidden = true
+        eyeButton.translatesAutoresizingMaskIntoConstraints = false
+        eyeButton.addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: ["kind": "eye"]
+        ))
+
+        addSubview(leadingImageView)
         addSubview(textLabel)
         addSubview(detailLabel)
         addSubview(trashButton)
-        NSLayoutConstraint.activate([
-            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 16),
-            iconView.heightAnchor.constraint(equalToConstant: 16),
+        addSubview(eyeButton)
 
-            textLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 10),
+        leadingImageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14).isActive = true
+        leadingImageView.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
+        smallSizeConstraints = [
+            leadingImageView.widthAnchor.constraint(equalToConstant: 16),
+            leadingImageView.heightAnchor.constraint(equalToConstant: 16),
+        ]
+        largeSizeConstraints = [
+            leadingImageView.widthAnchor.constraint(equalToConstant: 30),
+            leadingImageView.heightAnchor.constraint(equalToConstant: 30),
+        ]
+
+        NSLayoutConstraint.activate([
+            textLabel.leadingAnchor.constraint(equalTo: leadingImageView.trailingAnchor, constant: 10),
             textLabel.trailingAnchor.constraint(lessThanOrEqualTo: trashButton.leadingAnchor, constant: -8),
             textLabel.topAnchor.constraint(equalTo: topAnchor, constant: 7),
 
@@ -512,6 +619,11 @@ private final class HistoryCellView: NSTableCellView {
             trashButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             trashButton.widthAnchor.constraint(equalToConstant: 28),
             trashButton.heightAnchor.constraint(equalToConstant: 28),
+
+            eyeButton.trailingAnchor.constraint(equalTo: trashButton.leadingAnchor, constant: -6),
+            eyeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            eyeButton.widthAnchor.constraint(equalToConstant: 28),
+            eyeButton.heightAnchor.constraint(equalToConstant: 28),
         ])
 
         render()
@@ -534,21 +646,30 @@ private final class HistoryCellView: NSTableCellView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
-        if event.trackingArea?.userInfo?["kind"] as? String == "trash" {
-            setTrashHovered(true)
-        } else {
+        switch event.trackingArea?.userInfo?["kind"] as? String {
+        case "trash":
+            trashButton.showsRing = true
+        case "eye":
+            eyeButton.showsRing = true
+        default:
             trashButton.isHidden = false
+            eyeButton.isHidden = !clip.isImage
             onHoverEnter()
         }
     }
 
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
-        if event.trackingArea?.userInfo?["kind"] as? String == "trash" {
-            setTrashHovered(false)
-        } else {
+        switch event.trackingArea?.userInfo?["kind"] as? String {
+        case "trash":
+            trashButton.showsRing = false
+        case "eye":
+            eyeButton.showsRing = false
+        default:
             trashButton.isHidden = true
-            setTrashHovered(false)
+            eyeButton.isHidden = true
+            trashButton.showsRing = false
+            eyeButton.showsRing = false
         }
     }
 
@@ -556,19 +677,21 @@ private final class HistoryCellView: NSTableCellView {
         NSCursor.pointingHand.set()
     }
 
-    private func setTrashHovered(_ hovered: Bool) {
-        trashButton.showsRing = hovered
-    }
-
     @objc private func deleteTapped() {
         onDelete()
     }
 
-    /// Hides the trash button and ring without waiting for a mouse-exited event. Called
+    @objc private func previewTapped() {
+        onPreview()
+    }
+
+    /// Hides the hover buttons and rings without waiting for a mouse-exited event. Called
     /// on scroll, where rows move under a stationary cursor.
     func resetHover() {
         trashButton.isHidden = true
-        setTrashHovered(false)
+        eyeButton.isHidden = true
+        trashButton.showsRing = false
+        eyeButton.showsRing = false
     }
 
     override var backgroundStyle: NSView.BackgroundStyle {
@@ -582,20 +705,37 @@ private final class HistoryCellView: NSTableCellView {
             ? NSColor.selectedTextColor.withAlphaComponent(0.72)
             : NSColor.secondaryLabelColor
 
-        textLabel.attributedStringValue = NSAttributedString(
-            string: clip.preview,
-            attributes: [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: primary]
-        )
+        if clip.isImage {
+            NSLayoutConstraint.deactivate(smallSizeConstraints)
+            NSLayoutConstraint.activate(largeSizeConstraints)
+            leadingImageView.image = Self.thumbnail(for: clip)
+                ?? NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
+            leadingImageView.layer?.cornerRadius = 6
+            leadingImageView.layer?.masksToBounds = true
+            textLabel.toolTip = "Image"
+            textLabel.attributedStringValue = NSAttributedString(
+                string: "Image",
+                attributes: [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: primary]
+            )
+        } else {
+            NSLayoutConstraint.deactivate(largeSizeConstraints)
+            NSLayoutConstraint.activate(smallSizeConstraints)
+            leadingImageView.layer?.cornerRadius = 0
+            leadingImageView.layer?.masksToBounds = false
+            if let bundle = clip.appBundle, !bundle.isEmpty {
+                leadingImageView.image = Self.appIcon(for: bundle)
+            } else {
+                leadingImageView.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
+            }
+            textLabel.attributedStringValue = NSAttributedString(
+                string: clip.preview,
+                attributes: [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: primary]
+            )
+        }
 
         let age = Self.shortTimestamp(for: clip.createdAt)
         detailLabel.stringValue = [clip.appName, age].compactMap { $0 }.joined(separator: " · ")
         detailLabel.textColor = secondary
         detailLabel.font = .systemFont(ofSize: 11)
-
-        if let bundle = clip.appBundle, !bundle.isEmpty {
-            iconView.image = Self.appIcon(for: bundle)
-        } else {
-            iconView.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
-        }
     }
 }
