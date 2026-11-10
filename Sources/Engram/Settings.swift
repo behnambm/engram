@@ -30,12 +30,14 @@ enum Settings {
         get {
             guard let code = defaults.object(forKey: hotKeyCodeKey) as? Int,
                   let modifiers = defaults.object(forKey: hotKeyModifiersKey) as? Int,
-                  modifiers != 0  // a bare key would swallow ordinary typing system-wide
+                  let keyCode = UInt32(exactly: code),
+                  let modifierBits = UInt32(exactly: modifiers),
+                  modifierBits != 0  // a bare key would swallow ordinary typing system-wide
             else { return .default }
 
             return HotKeyCombo(
-                keyCode: UInt32(code),
-                modifiers: UInt32(modifiers),
+                keyCode: keyCode,
+                modifiers: modifierBits,
                 keyLabel: defaults.string(forKey: hotKeyLabelKey) ?? "?"
             )
         }

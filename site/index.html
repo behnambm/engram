@@ -178,6 +178,29 @@
   .header-nav a:hover { color: var(--text); background: var(--kbd-bg); }
   .header-nav a:active { opacity: 0.6; }
 
+  /* The nav Download button keeps the primary-button palette: the generic nav-link
+     descendant selector above would otherwise win and gray out the label (≈1.1:1). */
+  .header-nav a.btn {
+    color: var(--accent-ink);
+    background: var(--btn-bg);
+    border-radius: 980px;
+    padding: 8px 16px;
+    box-shadow: var(--shadow-cta);
+    transition: transform 0.2s var(--ease-spring), background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+  }
+  .header-nav a.btn:hover {
+    color: var(--accent-ink);
+    background: var(--btn-bg-hover);
+    transform: translateY(-1px);
+  }
+  .header-nav a.btn:active {
+    color: var(--accent-ink);
+    background: var(--btn-bg-press);
+    opacity: 1;
+    transform: scale(0.97);
+    transition-duration: 0.08s;
+  }
+
   /* ---------- Buttons ---------- */
   .btn {
     display: inline-flex;
@@ -730,7 +753,7 @@
             io.unobserve(entry.target);
           }
         });
-      }, { threshold: 0.12, rootMargin: '0px 0px -32px 0px' });
+      }, { threshold: 0, rootMargin: '0px 0px -32px 0px' });
 
       targets.forEach(function (el) { io.observe(el); });
     })();

@@ -8,9 +8,9 @@ import AppKit
 /// as Finder, Spotlight, and System Settings.
 @MainActor
 final class HistoryWindowController: NSWindowController {
-    /// Only one page is ever loaded, so opening and filtering stay ~1 ms no matter how
-    /// large the history is.
-    private static let displayLimit = 200
+    /// Page size for infinite scroll: the list loads this many clips at a time and fetches
+    /// more as the user scrolls.
+    private static let pageSize = 100
     private static let searchTopInset: CGFloat = 46
     private static let rowHeight: CGFloat = 46
 
@@ -22,6 +22,10 @@ final class HistoryWindowController: NSWindowController {
 
     private var clips: [Clip] = []
 
+    /// Whether more clips exist beyond what's currently loaded (infinite scroll).
+    private var hasMore = false
+    private var isLoadingMore = false
+
     /// The app that was frontmost before this window opened. A menu-bar agent keeps
     /// activation when its window closes, so focus has to be handed back explicitly or
     /// the next ⌘V goes nowhere.
@@ -30,10 +34,30 @@ final class HistoryWindowController: NSWindowController {
     /// The magnified image preview, if currently open.
     private var previewWindow: ImagePreviewWindowController?
 
+    // MARK: - Date filter
+
+    private struct DateFilter {
+        let title: String
+        /// The lookback window in hours; `nil` means "any time".
+        let hours: Int?
+    }
+
+    private static let dateFilters: [DateFilter] = [
+        DateFilter(title: "Any time", hours: nil),
+        DateFilter(title: "Past hour", hours: 1),
+        DateFilter(title: "Past 3 hours", hours: 3),
+        DateFilter(title: "Past 12 hours", hours: 12),
+        DateFilter(title: "Yesterday", hours: 24),
+        DateFilter(title: "Last week", hours: 24 * 7),
+    ]
+
+    private var dateFilterButtons: [ChipButton] = []
+    private var selectedDateFilterIndex = 0
+
     init(store: ClipStore) {
         self.store = store
         super.init(window: NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 440),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -50,7 +74,7 @@ final class HistoryWindowController: NSWindowController {
         // Spaces; fullScreenAuxiliary lets it show over a full-screen app.
         window?.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         window?.isReleasedWhenClosed = false
-        window?.minSize = NSSize(width: 460, height: 320)
+        window?.minSize = NSSize(width: 540, height: 340)
         window?.center()
         window?.contentView = makeContentView()
         window?.delegate = self
@@ -76,6 +100,7 @@ final class HistoryWindowController: NSWindowController {
         }
 
         searchField.stringValue = ""
+        selectDateFilter(0)
         reload()
 
         window?.center()
@@ -158,7 +183,10 @@ final class HistoryWindowController: NSWindowController {
         statusLabel.textColor = .tertiaryLabelColor
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        let dateFilterRow = makeDateFilterRow()
+
         root.addSubview(searchField)
+        root.addSubview(dateFilterRow)
         root.addSubview(scrollView)
         root.addSubview(statusLabel)
         root.addSubview(emptyLabel)
@@ -173,7 +201,11 @@ final class HistoryWindowController: NSWindowController {
             searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
             searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
 
-            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 10),
+            dateFilterRow.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
+            dateFilterRow.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
+            dateFilterRow.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -16),
+
+            scrollView.topAnchor.constraint(equalTo: dateFilterRow.bottomAnchor, constant: 10),
             scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
             scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
             scrollView.bottomAnchor.constraint(equalTo: statusLabel.topAnchor, constant: -6),
@@ -188,11 +220,58 @@ final class HistoryWindowController: NSWindowController {
         return root
     }
 
+    // MARK: - Date filter
+
+    private func makeDateFilterRow() -> NSStackView {
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.spacing = 6
+        stack.alignment = .centerY
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        for (index, filter) in Self.dateFilters.enumerated() {
+            let button = ChipButton()
+            button.baseTitle = filter.title
+            button.target = self
+            button.action = #selector(dateFilterChanged(_:))
+            button.tag = index
+            button.isSelected = index == selectedDateFilterIndex
+            stack.addArrangedSubview(button)
+            dateFilterButtons.append(button)
+        }
+        return stack
+    }
+
+    private func selectDateFilter(_ index: Int) {
+        selectedDateFilterIndex = index
+        for (buttonIndex, button) in dateFilterButtons.enumerated() {
+            button.isSelected = buttonIndex == index
+        }
+    }
+
+    @objc private func dateFilterChanged(_ sender: NSButton) {
+        selectDateFilter(sender.tag)
+        reload()
+    }
+
+    private func currentSinceDate() -> Date? {
+        guard let hours = Self.dateFilters[selectedDateFilterIndex].hours else { return nil }
+        return Date().addingTimeInterval(-Double(hours) * 3600)
+    }
+
     // MARK: - Filtering
 
     private func reload() {
         let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        clips = store.search(query, limit: Self.displayLimit)
+        let since = currentSinceDate()
+        let results = store.search(query, limit: Self.pageSize + 1, since: since)
+        if results.count > Self.pageSize {
+            hasMore = true
+            clips = Array(results.prefix(Self.pageSize))
+        } else {
+            hasMore = false
+            clips = results
+        }
 
         tableView.reloadData()
         if !clips.isEmpty {
@@ -202,25 +281,48 @@ final class HistoryWindowController: NSWindowController {
 
         emptyLabel.isHidden = !clips.isEmpty
         if clips.isEmpty {
-            emptyLabel.stringValue = query.isEmpty
-                ? "No clips yet — copy something first"
-                : "No matches"
+            if !query.isEmpty {
+                emptyLabel.stringValue = "No matches"
+            } else if selectedDateFilterIndex != 0 {
+                emptyLabel.stringValue = "No clips in this time range"
+            } else {
+                emptyLabel.stringValue = "No clips yet — copy something first"
+            }
         }
 
-        updateStatus(for: query)
+        updateStatus(for: query, since: since)
+    }
+
+    /// Infinite scroll: fetches the next page of results, keyed by the last clip's id.
+    private func loadMore() {
+        guard hasMore, !isLoadingMore, let last = clips.last else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+
+        let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let since = currentSinceDate()
+        let next = store.search(query, limit: Self.pageSize + 1, since: since, beforeId: last.id)
+        if next.count > Self.pageSize {
+            hasMore = true
+            clips.append(contentsOf: next.prefix(Self.pageSize))
+        } else {
+            hasMore = false
+            clips.append(contentsOf: next)
+        }
+        tableView.reloadData()
+        updateStatus(for: query, since: since)
     }
 
     /// Bottom status: total count normally, match info while a query is active.
-    private func updateStatus(for query: String) {
-        let total = store.count
+    private func updateStatus(for query: String, since: Date?) {
+        let total = since.map { store.count(since: $0) } ?? store.count
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             statusLabel.stringValue = "\(total.formatted()) clip\(total == 1 ? "" : "s")"
         } else {
             // The rows shown are the union of prefix + substring matches (see
-            // ClipStore.search), capped at displayLimit. A "+" marks a capped page.
-            let capped = clips.count == Self.displayLimit
-            statusLabel.stringValue = "\(clips.count.formatted())\(capped ? "+" : "") of \(total.formatted())"
+            // ClipStore.search). A "+" marks that more results are available on scroll.
+            statusLabel.stringValue = "\(clips.count.formatted())\(hasMore ? "+" : "") of \(total.formatted())"
         }
         statusLabel.isHidden = false
     }
@@ -250,7 +352,7 @@ final class HistoryWindowController: NSWindowController {
     private func copy(_ clip: Clip) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        if let imageData = clip.imageData {
+        if clip.isImage, let imageData = store.imageData(id: clip.id) {
             pasteboard.setData(imageData, forType: .png)
         } else {
             pasteboard.setString(clip.text, forType: .string)
@@ -262,6 +364,7 @@ final class HistoryWindowController: NSWindowController {
 
     private func deleteClip(_ clip: Clip) {
         store.delete(id: clip.id)
+        HistoryCellView.invalidateThumbnail(for: clip.id)
         reload()
     }
 
@@ -282,14 +385,24 @@ final class HistoryWindowController: NSWindowController {
     // MARK: - Image preview
 
     private func showPreview(for clip: Clip) {
-        guard let data = clip.imageData, let image = NSImage(data: data) else { return }
+        guard clip.isImage,
+              let data = store.imageData(id: clip.id),
+              let image = NSImage(data: data) else { return }
         previewWindow?.close()
         let controller = ImagePreviewWindowController(image: image)
         controller.onClose = { [weak self] in
-            self?.window?.makeKeyAndOrderFront(nil)
+            guard let self, self.window?.isVisible == true else { return }
+            self.window?.makeKeyAndOrderFront(nil)
         }
         previewWindow = controller
         controller.present()
+    }
+
+    /// Closes any open image preview without triggering its focus-restore callback.
+    private func dismissPreview() {
+        previewWindow?.onClose = nil
+        previewWindow?.close()
+        previewWindow = nil
     }
 
     private func previewSelectedImage() {
@@ -309,6 +422,12 @@ final class HistoryWindowController: NSWindowController {
                 cell.resetHover()
             }
         }
+
+        // Infinite scroll: load the next page when the user nears the bottom.
+        let lastVisible = rows.location + rows.length
+        if hasMore && lastVisible >= clips.count - 15 {
+            loadMore()
+        }
     }
 
     /// Close the history when the user focuses another app. Drop the previous-app handoff
@@ -316,6 +435,7 @@ final class HistoryWindowController: NSWindowController {
     @objc private func appDidResignActive() {
         guard window?.isVisible == true else { return }
         previousApp = nil
+        dismissPreview()
         window?.close()
     }
 }
@@ -383,6 +503,7 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
 extension HistoryWindowController: NSWindowDelegate {
     /// Every close path lands here — Return, click, Escape, or the title-bar button.
     func windowWillClose(_ notification: Notification) {
+        dismissPreview()
         guard let app = previousApp else { return }
         previousApp = nil
 
@@ -409,6 +530,88 @@ private final class HistoryTableView: NSTableView {
         default:
             super.keyDown(with: event)
         }
+    }
+}
+
+/// A date-filter chip: a rounded pill that tints on hover and fills with the accent color
+/// when selected. Shows a pointing-hand cursor on hover.
+@MainActor
+private final class ChipButton: NSButton {
+    var baseTitle: String = "" {
+        didSet { updateAppearance() }
+    }
+
+    var isSelected = false {
+        didSet { updateAppearance() }
+    }
+
+    private var isHovering = false {
+        didSet { updateAppearance() }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        isBordered = false
+        setButtonType(.momentaryChange)
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        layer?.masksToBounds = true
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        let text = attributedTitle.size()
+        return NSSize(width: text.width + 18, height: text.height + 8)
+    }
+
+    private func updateAppearance() {
+        let background: NSColor
+        let foreground: NSColor
+        if isSelected {
+            background = .controlAccentColor
+            foreground = .white
+        } else if isHovering {
+            background = .controlAccentColor.withAlphaComponent(0.18)
+            foreground = .labelColor
+        } else {
+            background = .clear
+            foreground = .labelColor
+        }
+        layer?.backgroundColor = background.cgColor
+        attributedTitle = NSAttributedString(string: baseTitle, attributes: [
+            .font: NSFont.systemFont(ofSize: 12),
+            .foregroundColor: foreground,
+        ])
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas
+        where area.options.contains(.mouseEnteredAndExited) || area.options.contains(.cursorUpdate) {
+            removeTrackingArea(area)
+        }
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovering = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovering = false
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.pointingHand.set()
     }
 }
 
@@ -492,7 +695,19 @@ private final class HistoryCellView: NSTableCellView {
     private static var iconCache: [String: NSImage] = [:]
 
     /// Decoded thumbnails are cached by clip id so filtering does not re-decode images.
-    private static var thumbnailCache: [Int64: NSImage] = [:]
+    /// `NSCache` bounds memory automatically instead of growing for the process lifetime.
+    private static let thumbnailCache: NSCache<NSNumber, NSImage> = {
+        let cache = NSCache<NSNumber, NSImage>()
+        cache.countLimit = 500
+        return cache
+    }()
+
+    /// Drops a cached thumbnail, e.g. when its clip is deleted. Clip ids are reused by
+    /// SQLite (INTEGER PRIMARY KEY without AUTOINCREMENT), so a stale entry would
+    /// otherwise be shown for a new clip that reuses the id.
+    static func invalidateThumbnail(for id: Int64) {
+        thumbnailCache.removeObject(forKey: NSNumber(value: id))
+    }
 
     private static func appIcon(for bundleID: String) -> NSImage {
         if let cached = iconCache[bundleID] { return cached }
@@ -504,25 +719,26 @@ private final class HistoryCellView: NSTableCellView {
     }
 
     private static func thumbnail(for clip: Clip) -> NSImage? {
-        guard let data = clip.imageData else { return nil }
-        if let cached = thumbnailCache[clip.id] { return cached }
-        guard let full = NSImage(data: data) else { return nil }
-        // Downscale to a small square so caching every visible image stays cheap.
+        guard let data = clip.thumb else { return nil }
+        if let cached = thumbnailCache.object(forKey: NSNumber(value: clip.id)) { return cached }
+        guard let source = NSImage(data: data) else { return nil }
+        // The source is already a small thumbnail; downscale to the cell's square so the
+        // cache stays tiny.
         let side: CGFloat = 60
         let thumb = NSImage(size: NSSize(width: side, height: side))
         thumb.lockFocus()
-        let imageSize = full.size
+        let imageSize = source.size
         let scale = min(side / max(imageSize.width, 1), side / max(imageSize.height, 1))
         let w = imageSize.width * scale
         let h = imageSize.height * scale
-        full.draw(
+        source.draw(
             in: NSRect(x: (side - w) / 2, y: (side - h) / 2, width: w, height: h),
             from: .zero,
             operation: .sourceOver,
             fraction: 1
         )
         thumb.unlockFocus()
-        thumbnailCache[clip.id] = thumb
+        thumbnailCache.setObject(thumb, forKey: NSNumber(value: clip.id))
         return thumb
     }
 

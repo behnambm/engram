@@ -124,6 +124,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// red = paused). The watcher checks `Settings.isPaused` before every capture.
     @objc private func togglePause() {
         Settings.isPaused.toggle()
+        if !Settings.isPaused {
+            // Discard any pasteboard change that occurred while paused, so it is not
+            // captured by the first watcher tick after unpausing.
+            watcher?.discardPendingChanges()
+        }
         statusItem?.button?.image = Self.makeMenuBarIcon()
     }
 

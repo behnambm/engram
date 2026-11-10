@@ -96,10 +96,23 @@ def ms(fn, n=150):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rows", type=int, default=100_000)
-    ap.add_argument("--db", default="/tmp/clips_bench.db")
+    ap.add_argument("--db", default=None,
+                    help="database path (default: /tmp/clips_bench.db)")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="allow replacing an existing --db file")
     args = ap.parse_args()
 
-    con, insert_s, index_s = build(args.db, args.rows)
+    if args.rows <= 0:
+        ap.error("--rows must be a positive integer")
+
+    db_path = args.db or "/tmp/clips_bench.db"
+    # Only guard explicitly supplied paths: the default /tmp scratch DB is meant to be
+    # rebuilt each run, but an accidental real path must never be silently deleted.
+    if args.db is not None and os.path.exists(db_path) and not args.overwrite:
+        ap.error(f"refusing to overwrite existing database '{db_path}' "
+                 f"(pass --overwrite to replace it)")
+
+    con, insert_s, index_s = build(db_path, args.rows)
     print(f"corpus: {args.rows:,} clips")
     print(f"  insert  : {insert_s:6.2f}s")
     print(f"  FTS build: {index_s:6.2f}s")
@@ -141,9 +154,14 @@ def main():
     failures = []
     for expected, label, fn in cases:
         p50, p95, n = ms(fn)
-        verdict = "ok " if (expected == "fast") == (p50 < FAST_MS) else "FAIL"
-        if verdict == "FAIL":
-            failures.append(label)
+        if expected == "fast":
+            verdict = "ok " if p50 < FAST_MS else "FAIL"
+            if p50 >= FAST_MS:
+                failures.append(label)
+        else:
+            # "slow" cases are informational reference points, not budgets: a slow
+            # shape completing quickly (smaller --rows, faster hardware) is not a failure.
+            verdict = "info"
         print(f"  [{verdict}] {label:<48} p50={p50:8.3f}ms p95={p95:8.3f}ms rows={n}")
 
     plan = " ".join(r[3] for r in con.execute(

@@ -6,7 +6,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+TMP_DMG="$ROOT/dist/Engram.dmg.tmp.$$"
+trap 'rm -rf "$WORK" "$TMP_DMG"' EXIT
 
 # 1. Release app (AppIcon.icns included by build-app.sh)
 "$ROOT/scripts/build-app.sh" release
@@ -46,5 +47,8 @@ show_pathbar = False
 PY
 
 # 4. Build the disk image
-(cd "$STAGE" && python3 -m dmgbuild -s settings.py "Engram" "$ROOT/dist/Engram.dmg")
+# Write the image to a temp name and rename it into place only on success, so an
+# interrupted build never leaves a partial file at the release path.
+(cd "$STAGE" && python3 -m dmgbuild -s settings.py "Engram" "$TMP_DMG")
+mv -f "$TMP_DMG" "$ROOT/dist/Engram.dmg"
 echo "wrote $ROOT/dist/Engram.dmg"

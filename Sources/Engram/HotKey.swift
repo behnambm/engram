@@ -26,7 +26,10 @@ final class GlobalHotKey {
         guard combo.modifiers != 0 else { return false }
 
         self.action = action
-        installEventHandlerIfNeeded()
+        guard installEventHandlerIfNeeded() else {
+            self.action = nil
+            return false
+        }
 
         var ref: EventHotKeyRef?
         let hotKeyID = EventHotKeyID(signature: Self.signature, id: Self.hotKeyID)
@@ -60,14 +63,15 @@ final class GlobalHotKey {
         action?()
     }
 
-    private func installEventHandlerIfNeeded() {
-        guard eventHandlerRef == nil else { return }
+    @discardableResult
+    private func installEventHandlerIfNeeded() -> Bool {
+        guard eventHandlerRef == nil else { return true }
 
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
         )
-        InstallEventHandler(
+        let status = InstallEventHandler(
             GetApplicationEventTarget(),
             hotKeyEventHandler,
             1,
@@ -75,6 +79,7 @@ final class GlobalHotKey {
             nil,
             &eventHandlerRef
         )
+        return status == noErr
     }
 }
 

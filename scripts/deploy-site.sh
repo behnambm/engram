@@ -21,5 +21,5 @@ if git -C "$WORK" diff --cached --quiet; then
 fi
 
 git -C "$WORK" commit -q -m "feat(engram): update landing page"
-git -C "$WORK" push -q origin master
+git -C "$WORK" push -q origin HEAD
 echo "deployed https://behnambm.github.io/engram/"

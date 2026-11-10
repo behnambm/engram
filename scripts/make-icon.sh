@@ -22,6 +22,9 @@ for s in 32 64 256 512; do
 done
 sips -z 1024 1024 "$WORK/AppIcon-1024.png" --out "$ICONSET/icon_512x512@2x.png" >/dev/null
 
-iconutil -c icns "$ICONSET" -o "$ROOT/Support/AppIcon.icns"
+# Stage both assets first, then publish, so a failed copy cannot leave a new .icns
+# paired with a stale PNG.
+iconutil -c icns "$ICONSET" -o "$WORK/AppIcon.icns"
+cp "$WORK/AppIcon.icns" "$ROOT/Support/AppIcon.icns"
 cp "$WORK/AppIcon-1024.png" "$ROOT/Support/AppIcon-1024.png"
 echo "wrote Support/AppIcon.icns"

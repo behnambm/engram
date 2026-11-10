@@ -39,5 +39,14 @@ centerText("Drag into your Applications folder",
            color: NSColor.white.withAlphaComponent(0.85), y: 176)
 
 NSGraphicsContext.restoreGraphicsState()
-try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: out))
+guard let png = rep.representation(using: .png, properties: [:]) else {
+    FileHandle.standardError.write(Data("make-background: could not encode PNG\n".utf8))
+    exit(1)
+}
+do {
+    try png.write(to: URL(fileURLWithPath: out), options: .atomic)
+} catch {
+    FileHandle.standardError.write(Data("make-background: could not write \(out): \(error.localizedDescription)\n".utf8))
+    exit(1)
+}
 print("wrote \(out)")

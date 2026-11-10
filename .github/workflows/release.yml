@@ -5,14 +5,21 @@ on:
     branches: [master]
   workflow_dispatch:
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
 jobs:
   publish:
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Compute version
         run: |
@@ -30,10 +37,12 @@ jobs:
           ./scripts/make-dmg.sh
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
         with:
           tag_name: v${{ env.VERSION }}-${{ env.BUILD }}
           name: Engram ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          fail_on_unmatched_files: true
           files: dist/Engram.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -43,3 +52,4 @@ jobs:
         with:
           name: Engram-${{ env.VERSION }}-${{ env.BUILD }}
           path: dist/Engram.dmg
+          if-no-files-found: error

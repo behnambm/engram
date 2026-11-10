@@ -18,13 +18,22 @@ BUILD="${BUILD:-1}"
 BIN_DIR="$(swift build -c "$CONFIG" --package-path "$ROOT" --show-bin-path)"
 swift build -c "$CONFIG" --package-path "$ROOT"
 
+# Assemble and sign into a unique staging bundle, then swap it into place only after
+# every step succeeds, so a failed build never destroys the last working bundle.
+mkdir -p "$ROOT/build"
+STAGING_DIR="$(mktemp -d "$ROOT/build/.Engram.staging.XXXXXX")"
+trap 'rm -rf "$STAGING_DIR"' EXIT
+STAGING="$STAGING_DIR/$APP_NAME.app"
+
+mkdir -p "$STAGING/Contents/MacOS" "$STAGING/Contents/Resources"
+cp "$BIN_DIR/$APP_NAME" "$STAGING/Contents/MacOS/$APP_NAME"
+cp "$ROOT/Support/Info.plist" "$STAGING/Contents/Info.plist"
+cp "$ROOT/Support/AppIcon.icns" "$STAGING/Contents/Resources/AppIcon.icns"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$STAGING/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$STAGING/Contents/Info.plist"
+codesign --force --sign - "$STAGING" >/dev/null
+
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN_DIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
-cp "$ROOT/Support/Info.plist" "$APP/Contents/Info.plist"
-cp "$ROOT/Support/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$APP/Contents/Info.plist"
-codesign --force --sign - "$APP" >/dev/null 2>&1
+mv "$STAGING" "$APP"
 
 echo "built $APP ($VERSION / $BUILD)"

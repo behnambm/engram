@@ -29,7 +29,7 @@ final class ClipboardWatcher {
 
     private static let checkInterval: TimeInterval = 0.5
     private static let maximumTextBytes = 1_000_000
-    private static let maximumImageBytes = 25_000_000
+    private static let maximumImageBytes = 100_000_000
 
     init(store: ClipStore) {
         self.store = store
@@ -48,10 +48,17 @@ final class ClipboardWatcher {
         timer = nil
     }
 
+    /// Resyncs the pasteboard counter without reading content, so a clip copied while
+    /// paused is not recorded by the first tick after unpausing.
+    func discardPendingChanges() {
+        lastChangeCount = NSPasteboard.general.changeCount
+    }
+
     private func checkPasteboard() {
         let pasteboard = NSPasteboard.general
-        guard pasteboard.changeCount != lastChangeCount else { return }
-        lastChangeCount = pasteboard.changeCount
+        let changeCount = pasteboard.changeCount
+        guard changeCount != lastChangeCount else { return }
+        lastChangeCount = changeCount
 
         // While paused, keep the change counter in sync but record nothing, so a clip
         // copied during the pause is never captured after unpausing.
@@ -65,13 +72,25 @@ final class ClipboardWatcher {
         // Text takes precedence; an image is recorded only when there is no text.
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
             guard text.utf8.count <= Self.maximumTextBytes else { return }
-            try? store.insert(text: text, appName: app?.localizedName, appBundle: app?.bundleIdentifier)
+            // Recheck the generation: if the pasteboard changed between the type check
+            // and this read, the bytes we hold are not the clip those types described.
+            guard pasteboard.changeCount == changeCount else { return }
+            do {
+                try store.insert(text: text, appName: app?.localizedName, appBundle: app?.bundleIdentifier)
+            } catch {
+                NSLog("Engram: could not record clipboard text: \(error.localizedDescription)")
+            }
             return
         }
 
         if let imageData = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff) {
             guard imageData.count <= Self.maximumImageBytes else { return }
-            try? store.insert(text: "", appName: app?.localizedName, appBundle: app?.bundleIdentifier, imageData: imageData)
+            guard pasteboard.changeCount == changeCount else { return }
+            do {
+                try store.insert(text: "", appName: app?.localizedName, appBundle: app?.bundleIdentifier, imageData: imageData)
+            } catch {
+                NSLog("Engram: could not record clipboard image: \(error.localizedDescription)")
+            }
         }
     }
 }

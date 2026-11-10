@@ -40,6 +40,15 @@ final class SettingsWindowController: NSWindowController {
         window?.center()
         window?.contentView = makeContentView()
         refreshControls()
+
+        // A recording shortcut capture must not survive focus loss (e.g. switching
+        // apps), or the next modified keystroke would silently replace the shortcut.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidResignKey),
+            name: NSWindow.didResignKeyNotification,
+            object: window
+        )
     }
 
     required init?(coder: NSCoder) {
@@ -172,6 +181,10 @@ final class SettingsWindowController: NSWindowController {
         refreshControls()
     }
 
+    @objc private func windowDidResignKey(_ notification: Notification) {
+        hotKeyButton.cancelRecording()
+    }
+
     private func presentError(_ message: String, _ error: Error) {
         let alert = NSAlert()
         alert.messageText = message
@@ -201,6 +214,18 @@ final class ShortcutRecorderButton: NSButton {
     }
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// Stops an in-progress recording and restores the displayed combo. Safe to call
+    /// when not recording.
+    func cancelRecording() {
+        guard isRecording else { return }
+        show(combo)
+    }
+
+    override func resignFirstResponder() -> Bool {
+        cancelRecording()
+        return super.resignFirstResponder()
+    }
 
     func show(_ combo: HotKeyCombo) {
         self.combo = combo

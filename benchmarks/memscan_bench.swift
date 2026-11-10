@@ -63,9 +63,10 @@ func bench(_ label: String, _ body: () -> Int) {
 
 let all = makeClips(100_000)
 let hot = Array(all.suffix(5_000))
-let allBytes = all.reduce(0) { $0 + $1.text.utf8.count + $1.lower.utf8.count }
-print("corpus: 100k clips, \(all.reduce(0) { $0 + $1.text.utf8.count } / 1_048_576) MB text, "
-      + "\(allBytes / 1_048_576) MB held in RAM\n")
+let textBytes = all.reduce(0) { $0 + $1.text.utf8.count }
+let heldBytes = all.reduce(0) { $0 + $1.text.utf8.count + $1.lower.utf8.count + $1.bytes.count }
+print("corpus: 100k clips, \(textBytes / 1_048_576) MB text, "
+      + "\(heldBytes / 1_048_576) MB estimated payload bytes held (text + lowercased copy + byte buffer)\n")
 
 let needleString = "invoice"
 let needleBytes = Array(needleString.utf8)
