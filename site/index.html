@@ -464,6 +464,7 @@
     align-items: center;
   }
   .tile-wide .stat-num { font-size: clamp(40px, 5vw, 56px); text-align: left; }
+  .tile-wide .stat-label { margin-left: 0; margin-right: 0; max-width: none; text-align: left; }
 
   /* mini search demo inside the flagship tile */
   .demo {
@@ -609,7 +610,7 @@
     <section class="hero">
       <p class="eyebrow" data-reveal>Clipboard history for macOS</p>
       <h1 data-reveal style="--reveal-delay:.05s">Everything you copy,<br>remembered.</h1>
-      <p class="sub" data-reveal style="--reveal-delay:.10s">Engram is a fast, searchable clipboard history for your Mac. Press a key, search, paste — anything you've copied, text or images, is always within reach.</p>
+      <p class="sub" data-reveal style="--reveal-delay:.10s">Engram is a fast, searchable clipboard history for your Mac. Press a key, search, and copy anything back — text or images, always within reach.</p>
       <div class="cta" data-reveal style="--reveal-delay:.15s">
         <a class="btn" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download for macOS</a>
         <a class="btn-ghost" href="#features">See what it does</a>
@@ -688,7 +689,7 @@
         <div class="tile" data-reveal style="--reveal-delay:.06s">
           <div class="glyph">⌘</div>
           <h3>Keyboard-first</h3>
-          <p>Arrows to move, Enter to paste, Esc to dismiss. Your hands never leave the keyboard.</p>
+          <p>Arrows to move, Enter to copy, Esc to dismiss. Your hands never leave the keyboard.</p>
         </div>
         <div class="tile" data-reveal>
           <div class="glyph">🧠</div>
@@ -708,7 +709,7 @@
         <div class="tile" data-reveal>
           <div class="glyph">⏸️</div>
           <h3>Pause anytime</h3>
-          <p>Pause recording with one click; the menu-bar dot turns red so you always know.</p>
+          <p>Pause recording any time; the menu-bar dot turns red so you always know.</p>
         </div>
         <div class="tile" data-reveal style="--reveal-delay:.06s">
           <div class="glyph">🔒</div>
@@ -726,7 +727,10 @@
             <h3>No limits</h3>
             <p>Keep unlimited history, or cap it. The list scrolls forever — no hard stop — and duplicates bump to the top.</p>
           </div>
-          <div class="stat-num">12&nbsp;MB</div>
+          <div>
+            <div class="stat-num">12&nbsp;MB</div>
+            <div class="stat-label">per 10,000 text clips</div>
+          </div>
         </div>
       </div>
     </section>
@@ -740,7 +744,7 @@
         <span class="point">Local only</span>
         <span class="point">No account</span>
         <span class="point">No telemetry</span>
-        <span class="point">Skips passwords</span>
+        <span class="point">Skips password managers</span>
       </div>
     </section>
 
