@@ -353,6 +353,25 @@
   }
   @keyframes blink { 50% { opacity: 0; } }
 
+  .mock-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .mock-chip {
+    font-size: 11px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--mock-divider);
+    color: var(--mock-secondary);
+  }
+  .mock-chip.selected {
+    background: #5867E8;
+    border-color: #5867E8;
+    color: #ffffff;
+  }
+
   .mock-row {
     display: flex;
     align-items: center;
@@ -590,7 +609,7 @@
     <section class="hero">
       <p class="eyebrow" data-reveal>Clipboard history for macOS</p>
       <h1 data-reveal style="--reveal-delay:.05s">Everything you copy,<br>remembered.</h1>
-      <p class="sub" data-reveal style="--reveal-delay:.10s">Engram is a fast, searchable clipboard history for your Mac. Press a key, search, paste — anything you've copied is always within reach.</p>
+      <p class="sub" data-reveal style="--reveal-delay:.10s">Engram is a fast, searchable clipboard history for your Mac. Press a key, search, paste — anything you've copied, text or images, is always within reach.</p>
       <div class="cta" data-reveal style="--reveal-delay:.15s">
         <a class="btn" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download for macOS</a>
         <a class="btn-ghost" href="#features">See what it does</a>
@@ -605,6 +624,12 @@
           <div class="window-body">
             <div class="mock-search">
               <span class="mag"></span><span>invoice</span><span class="caret"></span>
+            </div>
+            <div class="mock-filters">
+              <span class="mock-chip selected">Any time</span>
+              <span class="mock-chip">Past hour</span>
+              <span class="mock-chip">Yesterday</span>
+              <span class="mock-chip">Last week</span>
             </div>
             <div style="height:8px"></div>
             <div class="mock-row selected">
@@ -671,6 +696,21 @@
           <p>Every clip remembers where it came from and when, with relative timestamps.</p>
         </div>
         <div class="tile" data-reveal style="--reveal-delay:.06s">
+          <div class="glyph">🖼️</div>
+          <h3>Image history</h3>
+          <p>Copies images and screenshots too, with thumbnails and a one-click magnified preview.</p>
+        </div>
+        <div class="tile" data-reveal style="--reveal-delay:.12s">
+          <div class="glyph">🗓️</div>
+          <h3>Date filters</h3>
+          <p>Narrow your history by time — past hour, past 3 hours, yesterday, or last week.</p>
+        </div>
+        <div class="tile" data-reveal>
+          <div class="glyph">⏸️</div>
+          <h3>Pause anytime</h3>
+          <p>Pause recording with one click; the menu-bar dot turns red so you always know.</p>
+        </div>
+        <div class="tile" data-reveal style="--reveal-delay:.06s">
           <div class="glyph">🔒</div>
           <h3>Private by design</h3>
           <p>Skips password managers. Stored locally in SQLite — no cloud, no account.</p>
@@ -684,7 +724,7 @@
           <div>
             <div class="glyph">∞</div>
             <h3>No limits</h3>
-            <p>Keep unlimited history, or cap it. Duplicate copies bump to the top instead of piling up.</p>
+            <p>Keep unlimited history, or cap it. The list scrolls forever — no hard stop — and duplicates bump to the top.</p>
           </div>
           <div class="stat-num">12&nbsp;MB</div>
         </div>
