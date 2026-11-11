@@ -11,6 +11,9 @@ struct Clip: Identifiable {
     let thumb: Data?
     /// `true` when this clip is an image rather than text.
     let isImage: Bool
+    /// `true` when the clip is marked as a favorite. Mutable so rows can be updated in
+    /// place when the user toggles the star.
+    var isFavorite: Bool
     let appName: String?
     let appBundle: String?
     let createdAt: Date
@@ -66,11 +69,13 @@ final class ClipStore {
                 hash BLOB NOT NULL,
                 text TEXT NOT NULL,
                 image_data BLOB,
-                thumb BLOB
+                thumb BLOB,
+                favorite INTEGER NOT NULL DEFAULT 0
             )
             """)
         try addImageColumnIfNeeded()
         try addThumbColumnIfNeeded()
+        try addFavoriteColumnIfNeeded()
         try execute("CREATE UNIQUE INDEX IF NOT EXISTS clips_hash ON clips(hash)")
         try setUpFullTextSearch()
         try backfillThumbnails()
@@ -107,6 +112,22 @@ final class ClipStore {
         }
         if !hasThumb {
             try execute("ALTER TABLE clips ADD COLUMN thumb BLOB")
+        }
+    }
+
+    /// Older databases predate `favorite`; add the column in place.
+    private func addFavoriteColumnIfNeeded() throws {
+        let statement = try prepare("PRAGMA table_info(clips)")
+        defer { sqlite3_finalize(statement) }
+        var hasFavorite = false
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let name = sqlite3_column_text(statement, 1), String(cString: name) == "favorite" {
+                hasFavorite = true
+                break
+            }
+        }
+        if !hasFavorite {
+            try execute("ALTER TABLE clips ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
         }
     }
 
@@ -302,18 +323,32 @@ final class ClipStore {
         }
     }
 
+    /// Marks or unmarks a clip as a favorite.
+    func setFavorite(_ favorite: Bool, id: Int64) {
+        do {
+            let statement = try prepare("UPDATE clips SET favorite = ? WHERE id = ?")
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_int(statement, 1, favorite ? 1 : 0)
+            sqlite3_bind_int64(statement, 2, id)
+            try step(statement)
+        } catch {
+            NSLog("Engram: could not update favorite for clip \(id): \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Reading
 
-    func recent(limit: Int, since: Date? = nil, beforeId: Int64? = nil) -> [Clip] {
+    func recent(limit: Int, since: Date? = nil, beforeId: Int64? = nil, favoritesOnly: Bool = false) -> [Clip] {
         guard limit > 0 else { return [] }
         guard let statement = try? prepare("""
-            SELECT id, text, app_name, app_bundle, (image_data IS NOT NULL), thumb, created_at
-            FROM clips WHERE created_at >= ? AND id < ? ORDER BY id DESC LIMIT ?
+            SELECT id, text, app_name, app_bundle, (image_data IS NOT NULL), thumb, favorite, created_at
+            FROM clips WHERE created_at >= ? AND id < ? AND favorite >= ? ORDER BY id DESC LIMIT ?
             """) else { return [] }
         defer { sqlite3_finalize(statement) }
         sqlite3_bind_double(statement, 1, since?.timeIntervalSince1970 ?? 0)
         sqlite3_bind_int64(statement, 2, beforeId ?? Int64.max)
-        sqlite3_bind_int(statement, 3, Int32(limit))
+        sqlite3_bind_int(statement, 3, favoritesOnly ? 1 : 0)
+        sqlite3_bind_int(statement, 4, Int32(limit))
         return readClips(from: statement)
     }
 
@@ -324,13 +359,13 @@ final class ClipStore {
     /// substring set are returned, deduped by id and ordered newest-first, so neither
     /// class of match is silently dropped. The substring scan is the slow path (~12–16 ms
     /// at 100k clips); prefix-only queries could skip it, but correctness wins here.
-    func search(_ query: String, limit: Int, since: Date? = nil, beforeId: Int64? = nil) -> [Clip] {
+    func search(_ query: String, limit: Int, since: Date? = nil, beforeId: Int64? = nil, favoritesOnly: Bool = false) -> [Clip] {
         guard limit > 0 else { return [] }
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return recent(limit: limit, since: since, beforeId: beforeId) }
+        guard !trimmed.isEmpty else { return recent(limit: limit, since: since, beforeId: beforeId, favoritesOnly: favoritesOnly) }
 
-        let prefix = fullTextSearch(trimmed, limit: limit, since: since, beforeId: beforeId)
-        let substring = substringSearch(trimmed, limit: limit, since: since, beforeId: beforeId)
+        let prefix = fullTextSearch(trimmed, limit: limit, since: since, beforeId: beforeId, favoritesOnly: favoritesOnly)
+        let substring = substringSearch(trimmed, limit: limit, since: since, beforeId: beforeId, favoritesOnly: favoritesOnly)
 
         var seen = Set<Int64>()
         var merged: [Clip] = []
@@ -341,17 +376,18 @@ final class ClipStore {
         return merged
     }
 
-    private func fullTextSearch(_ query: String, limit: Int, since: Date? = nil, beforeId: Int64? = nil) -> [Clip] {
+    private func fullTextSearch(_ query: String, limit: Int, since: Date? = nil, beforeId: Int64? = nil, favoritesOnly: Bool = false) -> [Clip] {
         guard let expression = Self.matchExpression(for: query) else { return [] }
         // ORDER BY the FTS table's rowid, never the joined column and never `rank`:
         // rowid is the copy order, so this stops as soon as it has enough rows (0.03–2 ms
         // at 100k clips) instead of scoring every match (12–25 ms).
         guard let statement = try? prepare("""
-            SELECT c.id, c.text, c.app_name, c.app_bundle, (c.image_data IS NOT NULL), c.thumb, c.created_at
+            SELECT c.id, c.text, c.app_name, c.app_bundle, (c.image_data IS NOT NULL), c.thumb, c.favorite, c.created_at
             FROM clips_fts f JOIN clips c ON c.id = f.rowid
             WHERE clips_fts MATCH ?
               AND c.created_at >= ?
               AND c.id < ?
+              AND c.favorite >= ?
             ORDER BY f.rowid DESC
             LIMIT ?
             """) else { return [] }
@@ -359,28 +395,31 @@ final class ClipStore {
         sqlite3_bind_text(statement, 1, expression, -1, Self.transient)
         sqlite3_bind_double(statement, 2, since?.timeIntervalSince1970 ?? 0)
         sqlite3_bind_int64(statement, 3, beforeId ?? Int64.max)
-        sqlite3_bind_int(statement, 4, Int32(limit))
+        sqlite3_bind_int(statement, 4, favoritesOnly ? 1 : 0)
+        sqlite3_bind_int(statement, 5, Int32(limit))
         return readClips(from: statement)
     }
 
-    private func substringSearch(_ query: String, limit: Int, since: Date? = nil, beforeId: Int64? = nil) -> [Clip] {
+    private func substringSearch(_ query: String, limit: Int, since: Date? = nil, beforeId: Int64? = nil, favoritesOnly: Bool = false) -> [Clip] {
         let escaped = query
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "%", with: "\\%")
             .replacingOccurrences(of: "_", with: "\\_")
 
         guard let statement = try? prepare("""
-            SELECT id, text, app_name, app_bundle, (image_data IS NOT NULL), thumb, created_at FROM clips
+            SELECT id, text, app_name, app_bundle, (image_data IS NOT NULL), thumb, favorite, created_at FROM clips
             WHERE text LIKE ? ESCAPE '\\'
               AND created_at >= ?
               AND id < ?
+              AND favorite >= ?
             ORDER BY id DESC LIMIT ?
             """) else { return [] }
         defer { sqlite3_finalize(statement) }
         sqlite3_bind_text(statement, 1, "%\(escaped)%", -1, Self.transient)
         sqlite3_bind_double(statement, 2, since?.timeIntervalSince1970 ?? 0)
         sqlite3_bind_int64(statement, 3, beforeId ?? Int64.max)
-        sqlite3_bind_int(statement, 4, Int32(limit))
+        sqlite3_bind_int(statement, 4, favoritesOnly ? 1 : 0)
+        sqlite3_bind_int(statement, 5, Int32(limit))
         return readClips(from: statement)
     }
 
@@ -413,11 +452,14 @@ final class ClipStore {
         return sqlite3_step(statement) == SQLITE_ROW ? Int(sqlite3_column_int64(statement, 0)) : 0
     }
 
-    /// Number of clips newer than or equal to `since`. Used for the date-filter status line.
-    func count(since: Date) -> Int {
-        guard let statement = try? prepare("SELECT COUNT(*) FROM clips WHERE created_at >= ?") else { return 0 }
+    /// Number of clips matching the optional date and favorite filters. Used for the status line.
+    func count(since: Date? = nil, favoritesOnly: Bool = false) -> Int {
+        var sql = "SELECT COUNT(*) FROM clips WHERE favorite >= ?"
+        if since != nil { sql += " AND created_at >= ?" }
+        guard let statement = try? prepare(sql) else { return 0 }
         defer { sqlite3_finalize(statement) }
-        sqlite3_bind_double(statement, 1, since.timeIntervalSince1970)
+        sqlite3_bind_int(statement, 1, favoritesOnly ? 1 : 0)
+        if let since { sqlite3_bind_double(statement, 2, since.timeIntervalSince1970) }
         return sqlite3_step(statement) == SQLITE_ROW ? Int(sqlite3_column_int64(statement, 0)) : 0
     }
 
@@ -451,9 +493,10 @@ final class ClipStore {
                 text: text,
                 thumb: thumb,
                 isImage: sqlite3_column_int(statement, 4) != 0,
+                isFavorite: sqlite3_column_int(statement, 6) != 0,
                 appName: sqlite3_column_text(statement, 2).map { String(cString: $0) },
                 appBundle: sqlite3_column_text(statement, 3).map { String(cString: $0) },
-                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 6))
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 7))
             ))
         }
         return clips

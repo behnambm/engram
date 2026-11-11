@@ -54,6 +54,10 @@ final class HistoryWindowController: NSWindowController {
     private var dateFilterButtons: [ChipButton] = []
     private var selectedDateFilterIndex = 0
 
+    /// The "Favorites" filter toggle, shown next to the date filters.
+    private let favoritesButton = ChipButton()
+    private var favoritesOnly = false
+
     init(store: ClipStore) {
         self.store = store
         super.init(window: NSWindow(
@@ -239,6 +243,15 @@ final class HistoryWindowController: NSWindowController {
             stack.addArrangedSubview(button)
             dateFilterButtons.append(button)
         }
+
+        // Favorites toggle, independent of the mutually-exclusive date filters.
+        favoritesButton.symbolName = "star.fill"
+        favoritesButton.baseTitle = "Favorites"
+        favoritesButton.target = self
+        favoritesButton.action = #selector(toggleFavorites)
+        favoritesButton.isSelected = favoritesOnly
+        stack.addArrangedSubview(favoritesButton)
+
         return stack
     }
 
@@ -254,6 +267,12 @@ final class HistoryWindowController: NSWindowController {
         reload()
     }
 
+    @objc private func toggleFavorites() {
+        favoritesOnly.toggle()
+        favoritesButton.isSelected = favoritesOnly
+        reload()
+    }
+
     private func currentSinceDate() -> Date? {
         guard let hours = Self.dateFilters[selectedDateFilterIndex].hours else { return nil }
         return Date().addingTimeInterval(-Double(hours) * 3600)
@@ -264,7 +283,7 @@ final class HistoryWindowController: NSWindowController {
     private func reload() {
         let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let since = currentSinceDate()
-        let results = store.search(query, limit: Self.pageSize + 1, since: since)
+        let results = store.search(query, limit: Self.pageSize + 1, since: since, favoritesOnly: favoritesOnly)
         if results.count > Self.pageSize {
             hasMore = true
             clips = Array(results.prefix(Self.pageSize))
@@ -279,17 +298,7 @@ final class HistoryWindowController: NSWindowController {
             tableView.scrollRowToVisible(0)
         }
 
-        emptyLabel.isHidden = !clips.isEmpty
-        if clips.isEmpty {
-            if !query.isEmpty {
-                emptyLabel.stringValue = "No matches"
-            } else if selectedDateFilterIndex != 0 {
-                emptyLabel.stringValue = "No clips in this time range"
-            } else {
-                emptyLabel.stringValue = "No clips yet — copy something first"
-            }
-        }
-
+        updateEmptyLabel(for: query)
         updateStatus(for: query, since: since)
     }
 
@@ -301,7 +310,7 @@ final class HistoryWindowController: NSWindowController {
 
         let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let since = currentSinceDate()
-        let next = store.search(query, limit: Self.pageSize + 1, since: since, beforeId: last.id)
+        let next = store.search(query, limit: Self.pageSize + 1, since: since, beforeId: last.id, favoritesOnly: favoritesOnly)
         if next.count > Self.pageSize {
             hasMore = true
             clips.append(contentsOf: next.prefix(Self.pageSize))
@@ -315,16 +324,46 @@ final class HistoryWindowController: NSWindowController {
 
     /// Bottom status: total count normally, match info while a query is active.
     private func updateStatus(for query: String, since: Date?) {
-        let total = since.map { store.count(since: $0) } ?? store.count
+        let total = store.count(since: since, favoritesOnly: favoritesOnly)
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            statusLabel.stringValue = "\(total.formatted()) clip\(total == 1 ? "" : "s")"
+            let noun = favoritesOnly ? "favorite" : "clip"
+            statusLabel.stringValue = "\(total.formatted()) \(noun)\(total == 1 ? "" : "s")"
         } else {
             // The rows shown are the union of prefix + substring matches (see
             // ClipStore.search). A "+" marks that more results are available on scroll.
             statusLabel.stringValue = "\(clips.count.formatted())\(hasMore ? "+" : "") of \(total.formatted())"
         }
         statusLabel.isHidden = false
+    }
+
+    private func updateEmptyLabel(for query: String) {
+        emptyLabel.isHidden = !clips.isEmpty
+        guard clips.isEmpty else { return }
+        if !query.isEmpty {
+            emptyLabel.stringValue = "No matches"
+        } else if favoritesOnly {
+            emptyLabel.stringValue = "No favorites yet — star a clip to pin it here"
+        } else if selectedDateFilterIndex != 0 {
+            emptyLabel.stringValue = "No clips in this time range"
+        } else {
+            emptyLabel.stringValue = "No clips yet — copy something first"
+        }
+    }
+
+    /// Toggles a clip's favorite state in the store and the visible list.
+    private func toggleFavorite(_ clip: Clip) {
+        let newValue = !clip.isFavorite
+        store.setFavorite(newValue, id: clip.id)
+        if favoritesOnly && !newValue {
+            clips.removeAll { $0.id == clip.id }
+        } else if let index = clips.firstIndex(where: { $0.id == clip.id }) {
+            clips[index].isFavorite = newValue
+        }
+        tableView.reloadData()
+        let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        updateEmptyLabel(for: query)
+        updateStatus(for: query, since: currentSinceDate())
     }
 
     private func moveSelection(by delta: Int) {
@@ -495,7 +534,8 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
             clip: clip,
             onDelete: { [weak self] in self?.deleteClip(clip) },
             onHoverEnter: { [weak self] in self?.selectClip(clip) },
-            onPreview: { [weak self] in self?.showPreview(for: clip) }
+            onPreview: { [weak self] in self?.showPreview(for: clip) },
+            onFavorite: { [weak self] in self?.toggleFavorite(clip) }
         )
     }
 }
@@ -541,6 +581,11 @@ private final class ChipButton: NSButton {
         didSet { updateAppearance() }
     }
 
+    /// Optional SF Symbol rendered before the label (in system yellow).
+    var symbolName: String? {
+        didSet { updateAppearance() }
+    }
+
     var isSelected = false {
         didSet { updateAppearance() }
     }
@@ -582,10 +627,19 @@ private final class ChipButton: NSButton {
             foreground = .labelColor
         }
         layer?.backgroundColor = background.cgColor
-        attributedTitle = NSAttributedString(string: baseTitle, attributes: [
-            .font: NSFont.systemFont(ofSize: 12),
-            .foregroundColor: foreground,
-        ])
+
+        let font = NSFont.systemFont(ofSize: 12)
+        let result = NSMutableAttributedString()
+        if let symbolName,
+           let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil) {
+            let attachment = NSTextAttachment()
+            attachment.image = symbol.tinted(with: .systemYellow)
+            attachment.bounds = NSRect(x: 0, y: -2, width: 11, height: 11)
+            result.append(NSAttributedString(attachment: attachment))
+            result.append(NSAttributedString(string: " ", attributes: [.font: font, .foregroundColor: foreground]))
+        }
+        result.append(NSAttributedString(string: baseTitle, attributes: [.font: font, .foregroundColor: foreground]))
+        attributedTitle = result
     }
 
     override func updateTrackingAreas() {
@@ -615,27 +669,24 @@ private final class ChipButton: NSButton {
     }
 }
 
-/// A borderless icon button whose hover ring is a true circle. The ring is a circular
-/// `CAShapeLayer` path (not a rounded-rect border), so it can never stretch into an oval
-/// no matter how the button is sized. The icon and its ring share one color.
+/// A transparent icon button whose frosted background is provided by the cell's shared
+/// button bar. The icon is tinted `ringColor`.
 @MainActor
 private final class RingButton: NSButton {
-    private let ringLayer = CAShapeLayer()
-
-    var showsRing = false {
-        didSet { ringLayer.isHidden = !showsRing }
+    /// The SF Symbol shown on the button. Setting it updates the icon.
+    var symbolName: String {
+        didSet {
+            let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+            image?.isTemplate = true
+            self.image = image
+        }
     }
 
     init(symbolName: String, ringColor: NSColor) {
+        self.symbolName = symbolName
         super.init(frame: .zero)
-        wantsLayer = true
-        ringLayer.fillColor = nil
-        ringLayer.strokeColor = ringColor.cgColor
-        ringLayer.lineWidth = 1.0
-        ringLayer.isHidden = true
-        layer?.addSublayer(ringLayer)
-
         isBordered = false
+        setButtonType(.momentaryChange)
         let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
         image?.isTemplate = true
         self.image = image
@@ -644,19 +695,6 @@ private final class RingButton: NSButton {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
-    }
-
-    override func layout() {
-        super.layout()
-        ringLayer.frame = bounds
-        let diameter = min(bounds.width, bounds.height)
-        let circle = NSRect(
-            x: (bounds.width - diameter) / 2,
-            y: (bounds.height - diameter) / 2,
-            width: diameter,
-            height: diameter
-        ).insetBy(dx: ringLayer.lineWidth / 2, dy: ringLayer.lineWidth / 2)
-        ringLayer.path = CGPath(ellipseIn: circle, transform: nil)
     }
 }
 
@@ -674,11 +712,15 @@ private final class HistoryCellView: NSTableCellView {
     private let onDelete: (@MainActor () -> Void)
     private let onHoverEnter: (@MainActor () -> Void)
     private let onPreview: (@MainActor () -> Void)
+    private let onFavorite: (@MainActor () -> Void)
     private let leadingImageView = NSImageView()
     private let textLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     private let trashButton = RingButton(symbolName: "trash.fill", ringColor: .systemRed)
     private let eyeButton = RingButton(symbolName: "eye.fill", ringColor: .systemBlue)
+    private let starButton = RingButton(symbolName: "star", ringColor: .systemYellow)
+    /// Solid pill that spans the visible action buttons.
+    private let buttonBar = NSView()
 
     private var smallSizeConstraints: [NSLayoutConstraint] = []
     private var largeSizeConstraints: [NSLayoutConstraint] = []
@@ -755,12 +797,14 @@ private final class HistoryCellView: NSTableCellView {
         clip: Clip,
         onDelete: @escaping @MainActor () -> Void,
         onHoverEnter: @escaping @MainActor () -> Void,
-        onPreview: @escaping @MainActor () -> Void
+        onPreview: @escaping @MainActor () -> Void,
+        onFavorite: @escaping @MainActor () -> Void
     ) {
         self.clip = clip
         self.onDelete = onDelete
         self.onHoverEnter = onHoverEnter
         self.onPreview = onPreview
+        self.onFavorite = onFavorite
         super.init(frame: .zero)
 
         leadingImageView.translatesAutoresizingMaskIntoConstraints = false
@@ -804,11 +848,34 @@ private final class HistoryCellView: NSTableCellView {
             userInfo: ["kind": "eye"]
         ))
 
+        starButton.toolTip = clip.isFavorite ? "Remove from favorites" : "Add to favorites"
+        starButton.target = self
+        starButton.action = #selector(favoriteTapped)
+        starButton.isHidden = true
+        starButton.translatesAutoresizingMaskIntoConstraints = false
+        starButton.symbolName = clip.isFavorite ? "star.fill" : "star"
+        starButton.addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: ["kind": "star"]
+        ))
+
+        // Solid pill behind the action buttons so the row text can't show through.
+        buttonBar.wantsLayer = true
+        buttonBar.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        buttonBar.layer?.cornerRadius = 14
+        buttonBar.layer?.masksToBounds = true
+        buttonBar.isHidden = true
+        buttonBar.translatesAutoresizingMaskIntoConstraints = false
+
         addSubview(leadingImageView)
         addSubview(textLabel)
         addSubview(detailLabel)
+        addSubview(buttonBar)
         addSubview(trashButton)
         addSubview(eyeButton)
+        addSubview(starButton)
 
         leadingImageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14).isActive = true
         leadingImageView.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
@@ -836,11 +903,27 @@ private final class HistoryCellView: NSTableCellView {
             trashButton.widthAnchor.constraint(equalToConstant: 28),
             trashButton.heightAnchor.constraint(equalToConstant: 28),
 
-            eyeButton.trailingAnchor.constraint(equalTo: trashButton.leadingAnchor, constant: -6),
+            starButton.trailingAnchor.constraint(equalTo: trashButton.leadingAnchor, constant: -6),
+            starButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            starButton.widthAnchor.constraint(equalToConstant: 28),
+            starButton.heightAnchor.constraint(equalToConstant: 28),
+
+            eyeButton.trailingAnchor.constraint(equalTo: starButton.leadingAnchor, constant: -6),
             eyeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             eyeButton.widthAnchor.constraint(equalToConstant: 28),
             eyeButton.heightAnchor.constraint(equalToConstant: 28),
+
+            buttonBar.trailingAnchor.constraint(equalTo: trashButton.trailingAnchor, constant: 6),
+            buttonBar.centerYAnchor.constraint(equalTo: centerYAnchor),
+            buttonBar.heightAnchor.constraint(equalToConstant: 28),
         ])
+
+        // The pill covers only the visible buttons: the star for text clips, or the
+        // leftmost eye button for image clips.
+        let pillLeadingToStar = buttonBar.leadingAnchor.constraint(equalTo: starButton.leadingAnchor, constant: -6)
+        let pillLeadingToEye = buttonBar.leadingAnchor.constraint(equalTo: eyeButton.leadingAnchor, constant: -6)
+        pillLeadingToStar.isActive = !clip.isImage
+        pillLeadingToEye.isActive = clip.isImage
 
         render()
     }
@@ -863,13 +946,13 @@ private final class HistoryCellView: NSTableCellView {
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
         switch event.trackingArea?.userInfo?["kind"] as? String {
-        case "trash":
-            trashButton.showsRing = true
-        case "eye":
-            eyeButton.showsRing = true
+        case "trash", "eye", "star":
+            break
         default:
             trashButton.isHidden = false
             eyeButton.isHidden = !clip.isImage
+            starButton.isHidden = false
+            buttonBar.isHidden = false
             onHoverEnter()
         }
     }
@@ -877,15 +960,13 @@ private final class HistoryCellView: NSTableCellView {
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         switch event.trackingArea?.userInfo?["kind"] as? String {
-        case "trash":
-            trashButton.showsRing = false
-        case "eye":
-            eyeButton.showsRing = false
+        case "trash", "eye", "star":
+            break
         default:
             trashButton.isHidden = true
             eyeButton.isHidden = true
-            trashButton.showsRing = false
-            eyeButton.showsRing = false
+            starButton.isHidden = true
+            buttonBar.isHidden = true
         }
     }
 
@@ -901,13 +982,17 @@ private final class HistoryCellView: NSTableCellView {
         onPreview()
     }
 
+    @objc private func favoriteTapped() {
+        onFavorite()
+    }
+
     /// Hides the hover buttons and rings without waiting for a mouse-exited event. Called
     /// on scroll, where rows move under a stationary cursor.
     func resetHover() {
         trashButton.isHidden = true
         eyeButton.isHidden = true
-        trashButton.showsRing = false
-        eyeButton.showsRing = false
+        starButton.isHidden = true
+        buttonBar.isHidden = true
     }
 
     override var backgroundStyle: NSView.BackgroundStyle {
