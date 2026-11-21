@@ -159,6 +159,7 @@ final class HistoryWindowController: NSWindowController {
         tableView.action = #selector(rowClicked)
         tableView.onActivate = { [weak self] in self?.copySelected() }
         tableView.onCancel = { [weak self] in self?.window?.close() }
+        tableView.onRightClick = { [weak self] row in self?.previewImage(atRow: row) }
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("clip"))
         column.resizingMask = .autoresizingMask
@@ -462,6 +463,16 @@ final class HistoryWindowController: NSWindowController {
         showPreview(for: clips[row])
     }
 
+    /// Right-clicking an image clip opens it full-size. Left-click is untouched — it still
+    /// copies the clip and closes the window — so a right-click never copies by accident.
+    private func previewImage(atRow row: Int) {
+        guard clips.indices.contains(row) else { return }
+        let clip = clips[row]
+        guard clip.isImage else { return }
+        tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        showPreview(for: clip)
+    }
+
     /// Scrolling moves rows under a stationary cursor without a mouse-moved event, so a
     /// trash button would linger on the row the pointer already left. Reset hover on every
     /// visible row whenever the clip view scrolls.
@@ -574,6 +585,8 @@ extension HistoryWindowController: NSWindowDelegate {
 private final class HistoryTableView: NSTableView {
     var onActivate: (@MainActor () -> Void)?
     var onCancel: (@MainActor () -> Void)?
+    /// Reports the row under a right-click so the controller can preview image clips.
+    var onRightClick: (@MainActor (Int) -> Void)?
 
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
@@ -583,6 +596,15 @@ private final class HistoryTableView: NSTableView {
             onCancel?()
         default:
             super.keyDown(with: event)
+        }
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        let rowIndex = row(at: convert(event.locationInWindow, from: nil))
+        if rowIndex >= 0, let onRightClick {
+            onRightClick(rowIndex)
+        } else {
+            super.rightMouseDown(with: event)
         }
     }
 }
