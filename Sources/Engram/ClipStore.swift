@@ -60,6 +60,10 @@ final class ClipStore {
 
         try execute("PRAGMA journal_mode = WAL")
         try execute("PRAGMA synchronous = NORMAL")
+        // Wait for the write lock instead of failing with SQLITE_BUSY. Without this a
+        // second instance (or any stale lock) makes every capture fail instantly, and
+        // the clip is lost because the watcher can only log the error.
+        try execute("PRAGMA busy_timeout = 5000")
         try execute("""
             CREATE TABLE IF NOT EXISTS clips(
                 id INTEGER PRIMARY KEY,
@@ -230,7 +234,8 @@ final class ClipStore {
 
     /// Stores a text clip or an image clip (exactly one of `text`/`imageData` is the
     /// content). An identical clip (same hash) is removed first so the new row becomes
-    /// the newest — "bump to top" instead of a duplicate row.
+    /// the newest — "bump to top" instead of a duplicate row. The favorite flag moves
+    /// to the bumped row: re-copying a starred clip must not silently unstar it.
     func insert(text: String, appName: String?, appBundle: String?, imageData: Data? = nil) throws {
         let content: Data
         let storedText: String
@@ -243,6 +248,11 @@ final class ClipStore {
         } else {
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
+            // sqlite3_bind_text takes a 32-bit byte count and SQLite's default maximum
+            // string length is 1 GB: refuse instead of trapping or truncating.
+            guard text.utf8.count <= 1_000_000_000 else {
+                throw ClipStoreError.sqlite("clip is too large to store (\(text.utf8.count) bytes)")
+            }
             content = Data(text.utf8)
             storedText = text
             thumb = nil
@@ -250,6 +260,10 @@ final class ClipStore {
         let hash = Data(SHA256.hash(data: content))
 
         try transaction {
+            // Carry the favorite flag across the bump: the row is replaced, and a
+            // default-0 insert would unstar a clip the user explicitly saved.
+            let favorite = try favoriteValue(hash: hash)
+
             let delete = try prepare("DELETE FROM clips WHERE hash = ?")
             defer { sqlite3_finalize(delete) }
             _ = hash.withUnsafeBytes { bytes in
@@ -258,8 +272,8 @@ final class ClipStore {
             try step(delete)
 
             let insert = try prepare("""
-                INSERT INTO clips(created_at, app_name, app_bundle, hash, text, image_data, thumb)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO clips(created_at, app_name, app_bundle, hash, text, image_data, thumb, favorite)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             defer { sqlite3_finalize(insert) }
             sqlite3_bind_double(insert, 1, Date().timeIntervalSince1970)
@@ -281,11 +295,27 @@ final class ClipStore {
                     sqlite3_bind_blob(insert, 7, bytes.baseAddress, Int32(bytes.count), Self.transient)
                 }
             }
+            sqlite3_bind_int(insert, 8, favorite)
             try step(insert)
         }
     }
 
+    /// The favorite flag of the clip a dedupe bump is about to replace, or 0.
+    private func favoriteValue(hash: Data) throws -> Int32 {
+        let statement = try prepare("SELECT favorite FROM clips WHERE hash = ? LIMIT 1")
+        defer { sqlite3_finalize(statement) }
+        _ = hash.withUnsafeBytes { bytes in
+            sqlite3_bind_blob(statement, 1, bytes.baseAddress, Int32(bytes.count), Self.transient)
+        }
+        guard sqlite3_step(statement) == SQLITE_ROW else { return 0 }
+        return sqlite3_column_int(statement, 0)
+    }
+
     /// Drops the oldest clips beyond the configured limit. A limit of 0 keeps everything.
+    ///
+    /// Favorites are exempt: they are the clips the user explicitly saved, so trimming
+    /// housekeeping must never delete them (the history may therefore exceed the cap by
+    /// the number of favorites outside it).
     func enforceRetention() {
         let limit = Settings.retentionLimit
         guard limit > 0 else { return }
@@ -293,9 +323,11 @@ final class ClipStore {
         do {
             try transaction {
                 let statement = try prepare("""
-                    DELETE FROM clips WHERE id NOT IN (
-                        SELECT id FROM clips ORDER BY id DESC LIMIT ?
-                    )
+                    DELETE FROM clips
+                     WHERE favorite = 0
+                       AND id NOT IN (
+                           SELECT id FROM clips ORDER BY id DESC LIMIT ?
+                       )
                     """)
                 defer { sqlite3_finalize(statement) }
                 sqlite3_bind_int(statement, 1, Int32(limit))

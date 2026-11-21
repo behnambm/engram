@@ -105,6 +105,10 @@ final class HistoryWindowController: NSWindowController {
 
         searchField.stringValue = ""
         selectDateFilter(0)
+        // Reset every filter on open. Leaving the Favorites toggle on made a reopened
+        // palette show only starred clips, which reads as "my history disappeared".
+        favoritesOnly = false
+        favoritesButton.isSelected = false
         reload()
 
         window?.center()
@@ -369,6 +373,14 @@ final class HistoryWindowController: NSWindowController {
     private func moveSelection(by delta: Int) {
         guard !clips.isEmpty else { return }
         let current = tableView.selectedRow < 0 ? 0 : tableView.selectedRow
+
+        // Keyboard parity with scrolling: fetch the next page before the user reaches
+        // the end of the loaded rows, otherwise older clips are unreachable without a
+        // mouse and look lost even though they are still in the database.
+        if delta > 0, current >= clips.count - 1, hasMore {
+            loadMore()
+        }
+
         let next = min(max(current + delta, 0), clips.count - 1)
         tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
         tableView.scrollRowToVisible(next)
@@ -501,9 +513,11 @@ extension HistoryWindowController: NSSearchFieldDelegate {
         case #selector(NSResponder.cancelOperation(_:)):
             window?.close()
             return true
-        case #selector(NSResponder.deleteBackward(_:)), #selector(NSResponder.deleteForward(_:)):
-            // Backspace edits the query while it has text; on an empty field the delete
-            // key removes the selected entry instead.
+        case #selector(NSResponder.deleteToBeginningOfLine(_:)), #selector(NSResponder.deleteToEndOfLine(_:)):
+            // ⌘⌫ / ⌘⌦ is the deliberate "delete the selected clip" shortcut. Plain
+            // Backspace/Delete must never destroy history: with an empty search field a
+            // stray key press silently deleted the selected clip, with no confirmation
+            // and no undo. That is unrecoverable data loss, so it is not allowed.
             if searchField.stringValue.isEmpty {
                 deleteSelected()
                 return true

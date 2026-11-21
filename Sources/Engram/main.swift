@@ -9,10 +9,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var watcher: ClipboardWatcher?
     private var historyWindow: HistoryWindowController?
     private var settingsWindow: SettingsWindowController?
+    private var activityToken: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Baseline the pasteboard before the slow startup work (store open, migrations,
+        // thumbnail backfill, retention). The watcher is constructed afterwards; using
+        // the *current* counter there would treat a copy made during startup as already
+        // seen and drop it.
+        let launchChangeCount = NSPasteboard.general.changeCount
+
+        // A menu-bar agent has no visible window, so macOS App Naps it and throttles
+        // timers. Hold an activity token so clipboard capture keeps running; idle CPU
+        // stays at zero because a tick is a single integer comparison.
+        activityToken = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiatedAllowingIdleSystemSleep,
+            reason: "Record clipboard changes"
+        )
+
+        installMainMenu()
         installStatusItem()
-        openStore()
+        openStore(baselineChangeCount: launchChangeCount)
         registerHotKey()
 
         NotificationCenter.default.addObserver(
@@ -21,6 +37,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             name: .hotKeyDidChange,
             object: nil
         )
+    }
+
+    // MARK: - Main menu
+
+    /// Engram is a menu-bar agent (`LSUIElement`), so it has no visible menu bar — but a
+    /// main menu is still required for standard editing key equivalents (⌘A Select All,
+    /// ⌘C/⌘V/⌘X, ⌘Z) to reach the search field's field editor. Without it, those
+    /// shortcuts have no menu item to dispatch and ⌘A does nothing.
+    private func installMainMenu() {
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem()
+        mainMenu.addItem(appItem)
+        let appMenu = NSMenu()
+        appMenu.addItem(
+            withTitle: "Quit Engram",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
+        appItem.submenu = appMenu
+
+        let editItem = NSMenuItem()
+        mainMenu.addItem(editItem)
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: NSSelectorFromString("undo:"), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Redo", action: NSSelectorFromString("redo:"), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Cut", action: NSSelectorFromString("cut:"), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: NSSelectorFromString("copy:"), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: NSSelectorFromString("paste:"), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: NSSelectorFromString("selectAll:"), keyEquivalent: "a")
+        editItem.submenu = editMenu
+
+        NSApp.mainMenu = mainMenu
     }
 
     // MARK: - Status item
@@ -136,12 +186,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// A history that cannot be opened is fatal for a clipboard manager: say so and stop
     /// rather than run in a state where nothing is recorded.
-    private func openStore() {
+    private func openStore(baselineChangeCount: Int) {
         do {
             let store = try ClipStore()
             store.enforceRetention()
 
-            let watcher = ClipboardWatcher(store: store)
+            let watcher = ClipboardWatcher(store: store, baselineChangeCount: baselineChangeCount)
             watcher.start()
 
             self.store = store

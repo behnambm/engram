@@ -1,19 +1,34 @@
 import AppKit
 
-/// Polls the pasteboard and records new text clips.
+/// Polls the pasteboard and records new text and image clips.
 ///
 /// macOS has no clipboard-change notification, so a timer over `changeCount` is the
-/// only mechanism. 500 ms is what Maccy and Clipy ship; the check itself is one
-/// integer comparison and reads nothing until the counter moves.
+/// only mechanism. The check itself is one integer comparison and reads nothing until
+/// the counter moves. 250 ms (the interval the storage research lands on) keeps the
+/// idle cost at zero while halving the blind window in which two quick copies can
+/// collapse into a single recorded clip.
 @MainActor
 final class ClipboardWatcher {
     private let store: ClipStore
     private var timer: Timer?
     private var lastChangeCount: Int
 
+    /// A change that was observed but not recorded yet. Pasteboard data can be
+    /// provided lazily, so the first read after a copy can return nothing even though
+    /// `types` already advertise text or an image. Consuming the change at that point
+    /// loses the clip forever, so it stays pending and is retried on later ticks.
+    private var pendingChangeCount: Int?
+    private var pendingRetriesLeft = 0
+    private static let maximumRetries = 6
+
     /// Pasteboard types that mean "do not record this". Password managers do not all
     /// set the standard concealed type — KeePassXC sets its own, 1Password its own —
     /// so honouring only `org.nspasteboard.*` would put vault passwords in the history.
+    ///
+    /// `org.nspasteboard.source` and `com.apple.is-remote-clipboard` are deliberately
+    /// **not** here: both identify *where* content came from, not that it is transient
+    /// or confidential. Treating the Handoff marker as "do not record" silently
+    /// dropped every clip copied on an iPhone or another Mac.
     private static let ignoredTypes: Set<String> = [
         "org.nspasteboard.ConcealedType",
         "org.nspasteboard.TransientType",
@@ -24,23 +39,40 @@ final class ClipboardWatcher {
         "de.petermaurer.TransientPasteboardType",
         "com.typeit4me.clipping",
         "Pasteboard generator type",
-        "com.apple.is-remote-clipboard",
     ]
 
-    private static let checkInterval: TimeInterval = 0.5
-    private static let maximumTextBytes = 1_000_000
+    private static let checkInterval: TimeInterval = 0.25
     private static let maximumImageBytes = 100_000_000
+    /// SQLite binds strings with a 32-bit byte count and its default maximum string is
+    /// 1 GB. This is not a product limit (the old 1 MB cap was a real source of lost
+    /// clips); it only refuses values that cannot be stored safely at all.
+    private static let maximumTextBytes = 1_000_000_000
 
-    init(store: ClipStore) {
+    /// Whether a pasteboard type marks content that must not be recorded. Exposed to the
+    /// functional harness so a future edit cannot silently re-add an origin marker (such
+    /// as `com.apple.is-remote-clipboard`) to the skip set and start dropping clips.
+    static func isIgnored(_ type: String) -> Bool {
+        ignoredTypes.contains(type)
+    }
+
+    init(store: ClipStore, baselineChangeCount: Int? = nil) {
         self.store = store
-        self.lastChangeCount = NSPasteboard.general.changeCount
+        // Baseline at launch, not at construction: the store opens after the app did,
+        // and a copy made during that window must be recorded rather than treated as
+        // already seen.
+        self.lastChangeCount = baselineChangeCount ?? NSPasteboard.general.changeCount
     }
 
     func start() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: Self.checkInterval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: Self.checkInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.checkPasteboard() }
         }
+        // `.common` includes menu tracking and window drag/resize. Registered in the
+        // default mode only, the timer stalls while a menu is open or a window is being
+        // dragged, and several copies made in that gap collapse into the last one.
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     func stop() {
@@ -52,45 +84,95 @@ final class ClipboardWatcher {
     /// paused is not recorded by the first tick after unpausing.
     func discardPendingChanges() {
         lastChangeCount = NSPasteboard.general.changeCount
+        pendingChangeCount = nil
+        pendingRetriesLeft = 0
     }
 
     private func checkPasteboard() {
         let pasteboard = NSPasteboard.general
         let changeCount = pasteboard.changeCount
-        guard changeCount != lastChangeCount else { return }
-        lastChangeCount = changeCount
+
+        let isNewChange = changeCount != lastChangeCount
+        guard isNewChange || pendingChangeCount == changeCount else { return }
+
+        if isNewChange {
+            lastChangeCount = changeCount
+            pendingChangeCount = nil
+            pendingRetriesLeft = Self.maximumRetries
+        }
 
         // While paused, keep the change counter in sync but record nothing, so a clip
         // copied during the pause is never captured after unpausing.
-        guard !Settings.isPaused else { return }
+        guard !Settings.isPaused else {
+            pendingChangeCount = nil
+            return
+        }
 
-        guard let types = pasteboard.types else { return }
-        guard types.allSatisfy({ !Self.ignoredTypes.contains($0.rawValue) }) else { return }
+        // A pasteboard can expose its types a beat after its counter moves. Retry
+        // instead of consuming the change.
+        guard let types = pasteboard.types, !types.isEmpty else {
+            scheduleRetry(changeCount: changeCount, contentAdvertised: true)
+            return
+        }
+        guard !types.contains(where: { Self.isIgnored($0.rawValue) }) else {
+            pendingChangeCount = nil
+            return
+        }
 
         let app = NSWorkspace.shared.frontmostApplication
 
         // Text takes precedence; an image is recorded only when there is no text.
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
-            guard text.utf8.count <= Self.maximumTextBytes else { return }
+            guard text.utf8.count <= Self.maximumTextBytes else {
+                NSLog("Engram: skipped a \(text.utf8.count)-byte clip; too large to store")
+                pendingChangeCount = nil
+                return
+            }
             // Recheck the generation: if the pasteboard changed between the type check
             // and this read, the bytes we hold are not the clip those types described.
             guard pasteboard.changeCount == changeCount else { return }
             do {
                 try store.insert(text: text, appName: app?.localizedName, appBundle: app?.bundleIdentifier)
+                pendingChangeCount = nil
             } catch {
                 NSLog("Engram: could not record clipboard text: \(error.localizedDescription)")
+                scheduleRetry(changeCount: changeCount, contentAdvertised: true)
             }
             return
         }
 
         if let imageData = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff) {
-            guard imageData.count <= Self.maximumImageBytes else { return }
+            guard imageData.count <= Self.maximumImageBytes else {
+                pendingChangeCount = nil
+                return
+            }
             guard pasteboard.changeCount == changeCount else { return }
             do {
                 try store.insert(text: "", appName: app?.localizedName, appBundle: app?.bundleIdentifier, imageData: imageData)
+                pendingChangeCount = nil
             } catch {
                 NSLog("Engram: could not record clipboard image: \(error.localizedDescription)")
+                scheduleRetry(changeCount: changeCount, contentAdvertised: true)
             }
+            return
         }
+
+        // The change advertises text or an image but neither decoded yet. Keep it
+        // pending for another tick instead of dropping it.
+        let advertisesContent = types.contains(.string) || types.contains(.png) || types.contains(.tiff)
+        scheduleRetry(changeCount: changeCount, contentAdvertised: advertisesContent)
+    }
+
+    /// Keeps a change alive for another tick when its content is advertised but not
+    /// decodable yet (lazy pasteboard provider) or the insert failed. Capped so a
+    /// pasteboard that permanently exposes undecodable data does not turn into an
+    /// endless per-tick read.
+    private func scheduleRetry(changeCount: Int, contentAdvertised: Bool) {
+        guard contentAdvertised, pendingRetriesLeft > 0 else {
+            pendingChangeCount = nil
+            return
+        }
+        pendingChangeCount = changeCount
+        pendingRetriesLeft -= 1
     }
 }

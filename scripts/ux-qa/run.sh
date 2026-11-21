@@ -8,7 +8,9 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 swiftc -parse-as-library \
+  -module-cache-path "$WORK/mcache" \
   "$ROOT/Sources/Engram/ClipStore.swift" \
+  "$ROOT/Sources/Engram/ClipboardWatcher.swift" \
   "$ROOT/Sources/Engram/Settings.swift" \
   "$ROOT/scripts/ux-qa/Tests.swift" \
   -o "$WORK/tests"
