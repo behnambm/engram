@@ -3,803 +3,398 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Engram — Your clipboard's memory</title>
-<meta name="description" content="Engram is a fast, searchable clipboard history for macOS. Everything you copy, always within reach.">
+<meta name="theme-color" content="#101126">
+<title>Engram — Your clipboard, remembered</title>
+<meta name="description" content="A private, searchable clipboard history for macOS. Find copied text and images, then bring them back in seconds.">
 <link rel="icon" href="icon.png" type="image/png">
 <style>
-  /* ============================================================
-     Design tokens — adaptive light/dark; spring-tuned motion.
-     ============================================================ */
   :root {
-    color-scheme: light dark;
-
-    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-
-    --accent: #5462dc;
-    --accent-ink: #ffffff;
-    --accent-soft: rgba(84, 98, 220, 0.12);
-
-    --btn-bg: #5867e8;
-    --btn-bg-hover: #4c5ad1;
-    --btn-bg-press: #4350b8;
-
-    --bg: #fbfbfd;
-    --text: #1d1d1f;
-    --text-secondary: #6e6e73;
-    --text-tertiary: #6e6e73;
-    --hairline: rgba(0, 0, 0, 0.08);
-    --hairline-strong: rgba(0, 0, 0, 0.16);
-
-    --glass: rgba(255, 255, 255, 0.55);
-    --glass-solid: #ffffff;
-    --card: rgba(255, 255, 255, 0.66);
-    --card-solid: #ffffff;
-    --card-hover: rgba(255, 255, 255, 0.85);
-
-    --kbd-bg: rgba(0, 0, 0, 0.045);
-    --kbd-border: rgba(0, 0, 0, 0.14);
-    --kbd-text: #33333a;
-
-    --glow-a: rgba(88, 103, 232, 0.16);
-    --glow-b: rgba(46, 196, 182, 0.12);
-
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.04), 0 16px 40px rgba(0, 0, 0, 0.10);
-    --shadow-cta: 0 10px 32px rgba(88, 103, 232, 0.28);
-    --shadow-product: 0 40px 90px rgba(0, 0, 0, 0.18), 0 12px 30px rgba(0, 0, 0, 0.10);
-
-    --radius: 20px;
-    --radius-lg: 28px;
-
-    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-    --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+    color-scheme: dark light;
+    --bg: #101126;
+    --surface: #171a38;
+    --surface-raised: #202349;
+    --text: #f5f5ff;
+    --muted: #b5b6d0;
+    --subtle: #888ba9;
+    --line: rgba(208, 210, 255, .13);
+    --accent: #8792ff;
+    --accent-bright: #a8b0ff;
+    --mint: #83ead2;
+    --pink: #f39ada;
+    --yellow: #ffd88a;
+    --shadow: 0 30px 90px rgba(0, 0, 0, .38);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", sans-serif;
+    --ease: cubic-bezier(.2,.8,.2,1);
   }
-
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: light) {
     :root {
-      --accent: #6b79f0;
-      --accent-soft: rgba(107, 121, 240, 0.16);
-
-      --bg: #0a0c1c;
-      --text: #f5f5f7;
-      --text-secondary: #a1a1a6;
-      --text-tertiary: #7c7c85;
-      --hairline: rgba(255, 255, 255, 0.10);
-      --hairline-strong: rgba(255, 255, 255, 0.20);
-
-      --glass: rgba(13, 16, 36, 0.55);
-      --glass-solid: #0d1024;
-      --card: rgba(255, 255, 255, 0.05);
-      --card-solid: #141830;
-      --card-hover: rgba(255, 255, 255, 0.09);
-
-      --kbd-bg: rgba(255, 255, 255, 0.06);
-      --kbd-border: rgba(255, 255, 255, 0.16);
-      --kbd-text: #d6d9ff;
-
-      --glow-a: rgba(88, 103, 232, 0.34);
-      --glow-b: rgba(46, 196, 182, 0.16);
-
-      --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 4px 12px rgba(0, 0, 0, 0.30);
-      --shadow-md: 0 16px 40px rgba(0, 0, 0, 0.50);
-      --shadow-cta: 0 10px 40px rgba(88, 103, 232, 0.40);
-      --shadow-product: 0 40px 90px rgba(0, 0, 0, 0.60), 0 12px 30px rgba(0, 0, 0, 0.35);
+      color-scheme: light;
+      --bg: #f6f6fc;
+      --surface: #fff;
+      --surface-raised: #f0f0fa;
+      --text: #17182d;
+      --muted: #535570;
+      --subtle: #696b87;
+      --line: rgba(35, 38, 83, .12);
+      --accent: #4c5bd2;
+      --accent-bright: #3949c5;
+      --mint: #147e6d;
+      --pink: #a33e8d;
+      --yellow: #8a5b00;
+      --shadow: 0 30px 90px rgba(32, 35, 90, .14);
     }
   }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
-
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 90px; }
   body {
+    margin: 0;
+    min-width: 320px;
+    overflow-x: hidden;
+    background: var(--bg);
+    color: var(--text);
     font-family: var(--font);
-    font-size: 17px;
-    line-height: 1.5;
+    font-size: 16px;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-    color: var(--text);
-    min-height: 100vh;
-    background:
-      radial-gradient(1100px 700px at 82% -12%, var(--glow-a) 0%, transparent 60%),
-      radial-gradient(900px 600px at 8% -6%, var(--glow-b) 0%, transparent 55%),
-      var(--bg);
-    transition: color 0.3s var(--ease-out);
   }
-
   a { color: inherit; }
-  img { display: block; }
-
-  /* ---------- Typography ---------- */
-  h1, h2, h3 { font-family: var(--display); font-optical-sizing: auto; }
-  h1 {
-    font-size: clamp(44px, 8vw, 88px);
-    line-height: 1.04;
-    letter-spacing: -0.03em;
-    font-weight: 800;
-    text-wrap: balance;
+  button, a { -webkit-tap-highlight-color: transparent; }
+  a:focus-visible { outline: 3px solid var(--mint); outline-offset: 4px; border-radius: 5px; }
+  .shell { width: min(1120px, calc(100% - 48px)); margin-inline: auto; }
+  .ambient {
+    position: absolute; z-index: -1; top: -260px; left: 50%; width: min(1100px, 130vw); height: 800px;
+    transform: translateX(-50%); pointer-events: none; opacity: .52; filter: blur(2px);
+    background: radial-gradient(ellipse at 50% 42%, rgba(104, 93, 245, .34), transparent 56%),
+      radial-gradient(ellipse at 78% 45%, rgba(53, 196, 180, .16), transparent 39%),
+      radial-gradient(ellipse at 24% 55%, rgba(208, 92, 187, .16), transparent 34%);
+    animation: aurora 13s ease-in-out infinite alternate;
   }
-  h2 {
-    font-size: clamp(28px, 4.5vw, 44px);
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    font-weight: 700;
-    text-wrap: balance;
+  @keyframes aurora { from { transform: translate(-52%, -1%) scale(.96); } to { transform: translate(-48%, 2%) scale(1.06); } }
+  .header { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid transparent; transition: background .25s, border-color .25s; }
+  .header.scrolled { background: color-mix(in srgb, var(--bg) 82%, transparent); border-color: var(--line); backdrop-filter: blur(18px); }
+  .nav { height: 72px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .brand { display:flex; align-items:center; gap:10px; text-decoration:none; font-weight:750; letter-spacing:-.03em; font-size:18px; }
+  .brand img { width:30px; height:30px; border-radius:9px; }
+  .nav-links { display:flex; align-items:center; gap:28px; }
+  .nav-links a { color:var(--muted); font-size:14px; text-decoration:none; transition:color .2s; }
+  .nav-links a:hover { color:var(--text); }
+  .nav-links .nav-cta { color:var(--text); padding:9px 16px; border:1px solid rgba(167,174,255,.38); border-radius:999px; background:rgba(112,122,245,.16); }
+  .nav-links .nav-cta:hover { background:rgba(112,122,245,.28); }
+  .hero { min-height:720px; display:grid; grid-template-columns: .92fr 1.08fr; align-items:center; gap:42px; padding:66px 0 88px; }
+  .eyebrow { display:inline-flex; align-items:center; gap:9px; margin:0 0 21px; color:var(--mint); text-transform:uppercase; letter-spacing:.13em; font-weight:700; font-size:11px; }
+  .live-dot { width:7px; height:7px; border-radius:50%; background:var(--mint); box-shadow:0 0 16px var(--mint); animation:dot 2.4s ease-in-out infinite; }
+  @keyframes dot { 50% { opacity:.48; box-shadow:0 0 4px var(--mint); } }
+  h1,h2,h3,p { margin-top:0; }
+  h1 { max-width:610px; margin-bottom:23px; font-family:var(--display); font-size:clamp(52px, 7vw, 86px); line-height:.98; letter-spacing:-.072em; font-weight:760; }
+  .gradient-word { color:transparent; background:linear-gradient(100deg, #9ca5ff 4%, #d19ce8 53%, #89e7d5 100%); -webkit-background-clip:text; background-clip:text; }
+  .hero-copy { max-width:490px; color:var(--muted); font-size:18px; line-height:1.65; }
+  .actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top:30px; }
+  .button { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:50px; padding:0 21px; border:1px solid transparent; border-radius:999px; text-decoration:none; font-size:14px; font-weight:700; transition:transform .2s var(--ease), box-shadow .2s, background .2s; }
+  .button:hover { transform:translateY(-3px); }
+  .button-primary { color:#111329; background:linear-gradient(110deg, #aab2ff, #c2a5f2 58%, #9ce8d8); box-shadow:0 10px 35px rgba(132,130,255,.24); }
+  .button-primary:hover { box-shadow:0 15px 40px rgba(132,130,255,.38); }
+  .button-quiet { border-color:var(--line); color:var(--text); background:rgba(255,255,255,.035); }
+  .button-quiet:hover { background:rgba(255,255,255,.08); }
+  .button svg { width:16px; height:16px; }
+  .hero-note { margin:17px 0 0; color:var(--subtle); font-size:12px; }
+  .hero-art { position:relative; min-height:490px; display:grid; place-items:center; perspective:1100px; }
+  .orbit { position:absolute; width:430px; height:430px; border:1px solid rgba(152,160,255,.14); border-radius:50%; box-shadow:0 0 90px rgba(114,113,255,.11), inset 0 0 80px rgba(114,113,255,.06); animation:orbit 22s linear infinite; }
+  .orbit::before,.orbit::after { content:""; position:absolute; border:1px solid rgba(152,160,255,.09); border-radius:50%; inset:32px; }
+  .orbit::after { inset:75px; border-color:rgba(131,234,210,.12); }
+  @keyframes orbit { to { transform:rotate(360deg); } }
+  .app-window { position:relative; z-index:2; width:min(470px, 94%); padding:0 0 14px; overflow:hidden; transform:rotateY(-8deg) rotateX(3deg); border:1px solid rgba(194,198,255,.19); border-radius:19px; background:linear-gradient(145deg, rgba(34,37,77,.96), rgba(22,24,53,.98)); box-shadow:var(--shadow), 0 0 70px rgba(128,118,255,.13); animation:window-float 6.5s ease-in-out infinite; }
+  @keyframes window-float { 50% { transform:translateY(-9px) rotateY(-6deg) rotateX(2deg); } }
+  .titlebar { height:48px; display:flex; align-items:center; gap:7px; padding:0 15px; border-bottom:1px solid rgba(205,207,255,.10); }
+  .traffic { width:9px; height:9px; border-radius:50%; background:#ff6a65; box-shadow:15px 0 #ffc45a, 30px 0 #51d18b; margin-right:30px; }
+  .window-title { color:#c6c8e5; font-size:11px; font-weight:600; }
+  .keyhint { margin-left:auto; padding:3px 7px; border:1px solid rgba(210,212,255,.14); border-radius:6px; color:#aeb1d1; font-size:10px; }
+  .window-search { margin:15px 16px 11px; display:flex; align-items:center; gap:10px; padding:11px 13px; border:1px solid rgba(156,164,255,.36); border-radius:10px; background:rgba(9,11,31,.62); color:#f5f5ff; font-size:12px; }
+  .search-icon { width:12px; height:12px; border:1.5px solid #a6adff; border-radius:50%; position:relative; }
+  .search-icon::after { content:""; position:absolute; width:5px; height:1.5px; right:-4px; bottom:-2px; transform:rotate(45deg); background:#a6adff; }
+  .query { color:#fff; } .cursor { height:15px; border-left:1px solid #b5baff; animation:blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  .filter-row { display:flex; gap:6px; padding:0 17px 10px; flex-wrap:wrap; }
+  .filter { padding:4px 8px; border:1px solid rgba(194,198,255,.13); border-radius:999px; color:#afb2d2; font-size:9px; }
+  .filter.active { border-color:transparent; background:#555ac2; color:#fff; }
+  .clip-row { position:relative; min-height:53px; margin:2px 9px; padding:8px 11px; display:flex; align-items:center; gap:11px; border-radius:10px; color:#f1f1ff; }
+  .clip-row.selected { background:linear-gradient(100deg, rgba(102,111,223,.43), rgba(98,91,191,.24)); box-shadow:inset 0 0 0 1px rgba(175,180,255,.11); }
+  .clip-icon { width:27px; height:27px; flex:0 0 27px; display:grid; place-items:center; border-radius:8px; color:#c6caff; background:rgba(166,171,255,.13); font-size:12px; }
+  .clip-icon.image { color:#9aebd8; background:rgba(113,229,204,.13); }
+  .clip-icon.link { color:#f3b1df; background:rgba(236,145,210,.13); }
+  .clip-body { min-width:0; flex:1; }
+  .clip-text { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:11px; }
+  .clip-meta { margin-top:2px; color:#a3a6c4; font-size:9px; }
+  .clip-time { align-self:flex-start; padding-top:3px; color:#a3a6c4; font-size:9px; }
+  .window-footer { display:flex; justify-content:space-between; padding:11px 17px 0; color:#9b9fbd; font-size:9px; }
+  .floating-chip { position:absolute; z-index:3; display:flex; align-items:center; gap:9px; padding:10px 13px; border:1px solid rgba(203,207,255,.17); border-radius:13px; background:rgba(31,34,70,.87); box-shadow:0 12px 40px rgba(0,0,0,.25); backdrop-filter:blur(14px); color:#e9eaff; font-size:10px; animation:chip-float 5s ease-in-out infinite; }
+  .floating-chip b { font-size:11px; }
+  .floating-chip .mini { color:var(--mint); font-size:15px; }
+  .chip-one { top:58px; right:-7px; animation-delay:-1.2s; }
+  .chip-two { bottom:66px; left:-8px; animation-delay:-3s; }
+  .chip-three { right:17px; bottom:12px; animation-delay:-2s; }
+  @keyframes chip-float { 50% { transform:translateY(-9px) rotate(1deg); } }
+  .scroll-cue { position:absolute; bottom:0; left:50%; transform:translateX(-50%); color:var(--subtle); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+  .scroll-cue span { display:block; margin:6px auto 0; width:1px; height:25px; background:linear-gradient(var(--accent), transparent); animation:cue 1.8s ease-in-out infinite; }
+  @keyframes cue { 50% { transform:scaleY(.6); transform-origin:top; opacity:.5; } }
+  .proof { padding:28px 0 78px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .proof-grid { display:grid; grid-template-columns:repeat(3,1fr); }
+  .proof-item { padding:6px 25px; text-align:center; border-right:1px solid var(--line); }
+  .proof-item:last-child { border:0; }
+  .proof-item strong { display:block; color:var(--text); font-size:14px; }
+  .proof-item span { color:var(--subtle); font-size:12px; }
+  section.content { padding:112px 0; }
+  .section-heading { max-width:690px; margin:0 auto 51px; text-align:center; }
+  .section-heading .eyebrow { justify-content:center; }
+  h2 { margin-bottom:15px; font-family:var(--display); font-size:clamp(36px,5vw,58px); line-height:1.05; letter-spacing:-.055em; }
+  .section-heading p:last-child { margin-bottom:0; color:var(--muted); font-size:16px; }
+  .feature-grid { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+  .feature { position:relative; min-height:220px; grid-column:span 4; padding:25px; overflow:hidden; border:1px solid var(--line); border-radius:20px; background:linear-gradient(145deg, color-mix(in srgb,var(--surface) 94%, var(--accent) 6%), var(--surface)); transition:transform .3s var(--ease), border-color .3s, box-shadow .3s; }
+  .feature:hover { transform:translateY(-5px); border-color:color-mix(in srgb,var(--accent) 50%,var(--line)); box-shadow:0 18px 45px rgba(0,0,0,.12); }
+  .feature.wide { grid-column:span 8; min-height:280px; }
+  .feature.tall { grid-row:span 2; }
+  .feature-icon { width:42px; height:42px; display:grid; place-items:center; margin-bottom:24px; border:1px solid rgba(153,162,255,.24); border-radius:13px; color:var(--accent-bright); background:rgba(121,130,255,.12); }
+  .feature-icon svg { width:20px; height:20px; }
+  .feature h3 { margin-bottom:8px; font-size:17px; letter-spacing:-.02em; }
+  .feature p { max-width:390px; margin:0; color:var(--muted); font-size:13px; line-height:1.65; }
+  .feature-art { position:absolute; right:18px; bottom:0; width:46%; height:75%; opacity:.85; pointer-events:none; }
+  .stack-card { position:absolute; right:5%; width:150px; height:88px; border:1px solid rgba(173,180,255,.28); border-radius:14px; background:linear-gradient(140deg,rgba(103,111,224,.3),rgba(35,38,79,.85)); box-shadow:0 15px 34px rgba(0,0,0,.18); }
+  .stack-card::before { content:""; position:absolute; top:16px; left:15px; width:40px; height:5px; border-radius:5px; background:rgba(196,200,255,.6); box-shadow:0 13px 0 rgba(196,200,255,.25), 50px 0 0 -1px rgba(196,200,255,.28); }
+  .stack-card:nth-child(1) { top:22%; transform:rotate(10deg); opacity:.35; }
+  .stack-card:nth-child(2) { top:13%; transform:rotate(4deg); opacity:.55; }
+  .stack-card:nth-child(3) { top:4%; transform:rotate(-4deg); animation:stack 5s ease-in-out infinite; }
+  @keyframes stack { 50% { transform:translateY(-6px) rotate(-1deg); } }
+  .tiny-orbit { position:absolute; width:150px; height:150px; right:17%; top:10%; border:1px dashed rgba(167,175,255,.35); border-radius:50%; animation:orbit 18s linear infinite; }
+  .tiny-orbit::after { content:"✦"; position:absolute; top:3px; left:30px; color:var(--yellow); font-size:17px; }
+  .privacy-band { position:relative; overflow:hidden; padding:82px 0; border-block:1px solid var(--line); background:linear-gradient(110deg, rgba(89,88,194,.19), rgba(79,198,177,.08) 55%, rgba(208,103,190,.12)); }
+  .privacy-layout { display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:48px; }
+  .privacy-layout h2 { max-width:520px; }
+  .privacy-layout p { max-width:490px; margin:0; color:var(--muted); }
+  .privacy-visual { position:relative; min-height:250px; display:grid; place-items:center; }
+  .shield { width:160px; height:180px; display:grid; place-items:center; clip-path:polygon(50% 0,92% 17%,87% 67%,50% 100%,13% 67%,8% 17%); background:linear-gradient(155deg,rgba(157,167,255,.34),rgba(109,226,203,.16)); filter:drop-shadow(0 12px 40px rgba(120,128,255,.2)); animation:shield 4.5s ease-in-out infinite; }
+  .shield::before { content:"✓"; width:114px; height:132px; display:grid; place-items:center; clip-path:polygon(50% 0,92% 17%,87% 67%,50% 100%,13% 67%,8% 17%); color:#b9ffec; background:rgba(17,20,49,.68); font-size:51px; font-weight:300; }
+  @keyframes shield { 50% { transform:translateY(-8px) scale(1.03); } }
+  .ring { position:absolute; width:235px; height:235px; border:1px solid rgba(154,166,255,.22); border-radius:50%; animation:orbit 26s linear infinite; }
+  .ring::after { content:""; position:absolute; top:20px; right:24px; width:8px; height:8px; border-radius:50%; background:var(--mint); box-shadow:0 0 15px var(--mint); }
+  .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; counter-reset:steps; }
+  .step { position:relative; padding:25px 22px; border-top:1px solid var(--line); counter-increment:steps; }
+  .step::before { content:"0" counter(steps); display:block; margin-bottom:24px; color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.12em; }
+  .step h3 { margin-bottom:8px; font-size:15px; }
+  .step p { margin:0; color:var(--muted); font-size:13px; }
+  .final-cta { position:relative; overflow:hidden; margin:25px 0 85px; padding:64px 26px; border:1px solid rgba(169,176,255,.25); border-radius:26px; text-align:center; background:radial-gradient(ellipse at 50% 130%, rgba(111,124,255,.28), transparent 60%), var(--surface); }
+  .final-cta::before,.final-cta::after { content:""; position:absolute; width:180px; height:180px; border:1px solid rgba(169,176,255,.14); border-radius:50%; animation:orbit 24s linear infinite; }
+  .final-cta::before { top:-105px; left:9%; } .final-cta::after { right:8%; bottom:-115px; animation-direction:reverse; }
+  .final-cta h2 { position:relative; z-index:1; max-width:600px; margin:0 auto 12px; font-size:clamp(34px,5vw,52px); }
+  .final-cta p { position:relative; z-index:1; color:var(--muted); }
+  .final-cta .button { position:relative; z-index:1; margin-top:8px; }
+  footer { padding:24px 0 38px; border-top:1px solid var(--line); color:var(--subtle); font-size:12px; }
+  .footer-inner { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+  .footer-links { display:flex; gap:20px; }
+  .footer-links a { color:var(--muted); text-decoration:none; }
+  .footer-links a:hover { color:var(--text); }
+  [data-reveal] { opacity:0; transform:translateY(22px); transition:opacity .7s var(--ease),transform .7s var(--ease); }
+  [data-reveal].visible { opacity:1; transform:translateY(0); }
+  @media (max-width:900px) {
+    .hero { grid-template-columns:1fr; gap:10px; padding-top:78px; text-align:center; }
+    .hero-copy { margin-inline:auto; }
+    .hero .eyebrow,.actions { justify-content:center; }
+    h1 { margin-inline:auto; }
+    .hero-art { min-height:470px; }
+    .scroll-cue { display:none; }
+    .feature { grid-column:span 6; }
+    .feature.wide { grid-column:span 12; }
+    .feature.tall { grid-row:span 1; }
   }
-  h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
-  .sub { font-size: 19px; line-height: 1.55; color: var(--text-secondary); }
-  .eyebrow {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 14px;
+  @media (max-width:620px) {
+    .shell { width:min(100% - 32px, 1120px); }
+    .nav { height:64px; }
+    .nav-links { gap:14px; }
+    .nav-links a:not(.nav-cta) { display:none; }
+    .nav-links .nav-cta { padding:8px 12px; }
+    .hero { min-height:0; padding:66px 0 70px; }
+    h1 { font-size:clamp(49px, 15vw, 72px); }
+    .hero-copy { font-size:16px; }
+    .hero-art { min-height:360px; margin-inline:-5px; }
+    .orbit { width:320px; height:320px; }
+    .app-window { width:min(440px, 96%); transform:none; }
+    .app-window { animation:window-float-mobile 6.5s ease-in-out infinite; }
+    @keyframes window-float-mobile { 50% { transform:translateY(-6px); } }
+    .chip-one { top:12px; right:0; } .chip-two { bottom:24px; left:0; } .chip-three { display:none; }
+    .proof { padding:23px 0 56px; }
+    .proof-grid { grid-template-columns:1fr; gap:15px; }
+    .proof-item { border:0; }
+    section.content { padding:78px 0; }
+    .section-heading { margin-bottom:34px; }
+    .feature-grid { display:flex; flex-direction:column; }
+    .feature { min-height:190px; }
+    .feature.wide { min-height:215px; }
+    .feature-art { width:40%; opacity:.55; }
+    .privacy-layout { grid-template-columns:1fr; gap:15px; text-align:center; }
+    .privacy-layout h2,.privacy-layout p { margin-inline:auto; }
+    .privacy-visual { min-height:210px; order:-1; }
+    .shield { transform:scale(.82); }
+    .steps { grid-template-columns:1fr; gap:5px; }
+    .step { padding:19px 5px; }
+    .step::before { margin-bottom:10px; }
+    .final-cta { margin:0 0 60px; padding:52px 20px; }
+    .footer-inner { align-items:flex-start; flex-direction:column; }
   }
-
-  /* ---------- Header ---------- */
-  .header {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: var(--glass);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: 1px solid transparent;
-    transition: border-color 0.3s var(--ease-out), background 0.3s var(--ease-out);
-  }
-  .header.scrolled { border-bottom-color: var(--hairline); }
-  .header-inner {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 14px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-weight: 700;
-    font-size: 16px;
-    letter-spacing: -0.01em;
-    text-decoration: none;
-  }
-  .brand img { width: 26px; height: 26px; border-radius: 7px; }
-  .header-nav { display: flex; align-items: center; gap: 4px; }
-  .header-nav a {
-    color: var(--text-secondary);
-    text-decoration: none;
-    font-size: 14px;
-    padding: 8px 12px;
-    border-radius: 8px;
-    transition: color 0.2s var(--ease-out), background 0.2s var(--ease-out);
-  }
-  .header-nav a:hover { color: var(--text); background: var(--kbd-bg); }
-  .header-nav a:active { opacity: 0.6; }
-
-  /* The nav Download button keeps the primary-button palette: the generic nav-link
-     descendant selector above would otherwise win and gray out the label (≈1.1:1). */
-  .header-nav a.btn {
-    color: var(--accent-ink);
-    background: var(--btn-bg);
-    border-radius: 980px;
-    padding: 8px 16px;
-    box-shadow: var(--shadow-cta);
-    transition: transform 0.2s var(--ease-spring), background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
-  }
-  .header-nav a.btn:hover {
-    color: var(--accent-ink);
-    background: var(--btn-bg-hover);
-    transform: translateY(-1px);
-  }
-  .header-nav a.btn:active {
-    color: var(--accent-ink);
-    background: var(--btn-bg-press);
-    opacity: 1;
-    transform: scale(0.97);
-    transition-duration: 0.08s;
-  }
-
-  /* ---------- Buttons ---------- */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--btn-bg);
-    color: var(--accent-ink);
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 16px;
-    padding: 13px 30px;
-    border-radius: 980px;
-    box-shadow: var(--shadow-cta);
-    will-change: transform;
-    transition: transform 0.2s var(--ease-spring), background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
-  }
-  .btn:hover { background: var(--btn-bg-hover); transform: translateY(-1px); }
-  .btn:active { background: var(--btn-bg-press); transform: scale(0.97); transition-duration: 0.08s; }
-  .btn-sm { padding: 8px 16px; font-size: 14px; }
-
-  .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--accent);
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 16px;
-    padding: 13px 24px;
-    border-radius: 980px;
-    transition: color 0.2s var(--ease-out), background 0.2s var(--ease-out);
-  }
-  .btn-ghost:hover { background: var(--accent-soft); }
-  .btn-ghost:active { opacity: 0.6; }
-
-  /* Visible keyboard focus for every link/button. */
-  a:focus-visible {
-    outline: 3px solid var(--accent);
-    outline-offset: 3px;
-  }
-
-  /* ---------- Hero ---------- */
-  .hero { text-align: center; padding: 104px 24px 0; }
-  .hero .sub { max-width: 620px; margin: 20px auto 0; }
-  .cta {
-    margin-top: 34px;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .product-wrap { margin-top: 72px; position: relative; padding-bottom: 80px; }
-  .product-wrap::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: 20px;
-    transform: translateX(-50%);
-    width: min(720px, 80%);
-    height: 60px;
-    background: radial-gradient(ellipse at center, var(--glow-a) 0%, transparent 70%);
-    filter: blur(6px);
-  }
-
-  /* The product itself: a faithful, CSS-drawn copy of the history window.
-     The app window is always dark indigo, so the mock is too — in both light
-     and dark page modes. Mock tokens are scoped to .window and never follow
-     the page theme. */
-  .window {
-    position: relative;
-    max-width: 640px;
-    margin: 0 auto;
-    text-align: left;
-
-    /* App palette (HistoryWindow.Palette), calibrated 0–1 → 8-bit. */
-    --mock-bg: #16172F;
-    --mock-text: #F0F0F7;
-    --mock-secondary: #9A9DB3;
-    --mock-search-bg: #22243C;
-    --mock-search-border: #3D3F5B;
-    --mock-selected: #252D5A;
-    --mock-divider: #34354C;
-    --mock-caret: #7C88FF;
-
-    background: var(--mock-bg);
-    border: 1px solid var(--mock-divider);
-    border-radius: 16px;
-    box-shadow: var(--shadow-product);
-    overflow: hidden;
-  }
-  .window-titlebar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--mock-divider);
-  }
-  .tl { width: 12px; height: 12px; border-radius: 50%; }
-  .tl-close { background: #ff5f57; }
-  .tl-min { background: #febc2e; }
-  .tl-max { background: #28c840; }
-  .window-title {
-    margin-left: 8px;
-    font-size: 12px;
-    color: var(--mock-secondary);
-    font-weight: 500;
-  }
-  .window-body { padding: 14px 16px 12px; }
-
-  .mock-search {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--mock-search-bg);
-    border: 1px solid var(--mock-search-border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-size: 14px;
-    color: var(--mock-text);
-  }
-  .mag {
-    flex: 0 0 auto;
-    width: 12px;
-    height: 12px;
-    border: 1.5px solid var(--text-tertiary);
-    border-radius: 50%;
-    position: relative;
-  }
-  .mag::after {
-    content: "";
-    position: absolute;
-    right: -4px;
-    bottom: -3px;
-    width: 5px;
-    height: 1.5px;
-    background: var(--text-tertiary);
-    transform: rotate(45deg);
-    transform-origin: left center;
-  }
-  .window .mag { border-color: var(--mock-secondary); }
-  .window .mag::after { background: var(--mock-secondary); }
-  .mock-search .caret {
-    width: 1px;
-    height: 1em;
-    background: var(--mock-caret);
-    animation: blink 1s steps(2, start) infinite;
-  }
-  @keyframes blink { 50% { opacity: 0; } }
-
-  .mock-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
-  }
-  .mock-chip {
-    font-size: 11px;
-    padding: 4px 9px;
-    border-radius: 999px;
-    border: 1px solid var(--mock-divider);
-    color: var(--mock-secondary);
-  }
-  .mock-chip.selected {
-    background: #5867E8;
-    border-color: #5867E8;
-    color: #ffffff;
-  }
-
-  .mock-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    border-radius: 10px;
-  }
-  .mock-row.selected { background: var(--mock-selected); }
-  .mock-text {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: 14px;
-    color: var(--mock-text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .mock-meta {
-    flex: 0 0 auto;
-    font-size: 12px;
-    color: var(--mock-secondary);
-  }
-  .window-status {
-    padding: 8px 12px 2px;
-    font-size: 12px;
-    color: var(--mock-secondary);
-  }
-
-  /* ---------- Stats band ---------- */
-  .stats {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 72px 24px 24px;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 32px;
-    text-align: center;
-  }
-  .stat-num {
-    font-family: var(--display);
-    font-size: clamp(40px, 6vw, 64px);
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1;
-    background: linear-gradient(180deg, var(--text) 0%, var(--text-secondary) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  .stat-label { margin-top: 8px; font-size: 14px; color: var(--text-secondary); max-width: 220px; margin-left: auto; margin-right: auto; }
-
-  /* ---------- Sections & bento ---------- */
-  .section { padding: 88px 0; }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
-  .section-head { text-align: center; max-width: 640px; margin: 0 auto 56px; }
-  .section-head .sub { margin-top: 16px; }
-
-  .bento { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-  .tile {
-    background: var(--card);
-    -webkit-backdrop-filter: saturate(160%) blur(24px);
-    backdrop-filter: saturate(160%) blur(24px);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius);
-    padding: 30px 28px;
-    box-shadow: var(--shadow-sm);
-    will-change: transform;
-    transition: transform 0.35s var(--ease-out), background 0.35s var(--ease-out),
-                border-color 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out);
-  }
-  .tile:hover {
-    transform: translateY(-3px);
-    background: var(--card-hover);
-    border-color: var(--hairline-strong);
-    box-shadow: var(--shadow-md);
-  }
-  .tile:active { transform: translateY(-1px) scale(0.99); transition-duration: 0.08s; }
-  .tile .glyph { font-size: 30px; line-height: 1; margin-bottom: 16px; }
-  .tile h3 { margin-bottom: 8px; }
-  .tile p { font-size: 15px; line-height: 1.5; color: var(--text-secondary); }
-
-  .span-2 { grid-column: span 2; }
-  .span-3 { grid-column: span 3; }
-
-  .tile-wide {
-    grid-column: span 3;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 32px;
-    align-items: center;
-  }
-  .tile-wide .stat-num { font-size: clamp(40px, 5vw, 56px); text-align: left; }
-  .tile-wide .stat-label { margin-left: 0; margin-right: 0; max-width: none; text-align: left; }
-
-  /* mini search demo inside the flagship tile */
-  .demo {
-    margin-top: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    max-width: 360px;
-    background: var(--kbd-bg);
-    border: 1px solid var(--hairline);
-    border-radius: 12px;
-    padding: 12px 14px;
-    font-size: 15px;
-    color: var(--text);
-  }
-  .demo .caret { width: 1px; height: 1em; background: var(--accent); animation: blink 1s steps(2, start) infinite; }
-
-  /* ---------- Privacy band (always-dark, full bleed) ---------- */
-  .privacy {
-    background: linear-gradient(180deg, #11142e 0%, #0a0c1c 100%);
-    color: #f5f5f7;
-    text-align: center;
-    padding: 96px 24px;
-  }
-  .privacy .glyph {
-    width: 72px;
-    height: 72px;
-    margin: 0 auto 24px;
-    border-radius: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 34px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-  }
-  .privacy h2 { color: #f5f5f7; }
-  .privacy p { color: #b6b9d4; max-width: 560px; margin: 16px auto 0; font-size: 18px; line-height: 1.55; }
-  .privacy .points {
-    margin-top: 36px;
-    display: flex;
-    gap: 16px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-  .privacy .point {
-    font-size: 14px;
-    color: #e3e5f6;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 980px;
-    padding: 9px 18px;
-  }
-
-  /* ---------- Download band ---------- */
-  .download-band { text-align: center; padding: 96px 24px 120px; }
-  .download-band h2 { margin-bottom: 14px; }
-  .download-band .sub { max-width: 560px; margin: 0 auto; }
-  .download-band .cta { margin-top: 30px; }
-  .hint { font-size: 13.5px; color: var(--text-tertiary); margin-top: 14px; }
-
-  footer {
-    border-top: 1px solid var(--hairline);
-    padding: 32px 24px;
-  }
-  .footer-inner {
-    max-width: 1080px;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-    font-size: 13px;
-    color: var(--text-tertiary);
-  }
-  .footer-inner a { color: var(--text-secondary); text-decoration: none; }
-  .footer-inner a:hover { color: var(--text); }
-  .footer-links { display: flex; gap: 20px; }
-
-  #features, #privacy, #download { scroll-margin-top: 80px; }
-
-  /* ---------- Motion ---------- */
-  .js [data-reveal] { opacity: 0; }
-  .js [data-reveal].is-visible {
-    opacity: 1;
-    animation: rise 0.8s var(--ease-out) backwards;
-    animation-delay: var(--reveal-delay, 0s);
-  }
-  @keyframes rise {
-    from { opacity: 0; transform: translateY(24px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  /* ---------- Responsive ---------- */
-  @media (max-width: 860px) {
-    .bento { grid-template-columns: 1fr; }
-    .span-2, .span-3, .tile-wide { grid-column: span 1; }
-    .tile-wide { grid-template-columns: 1fr; }
-    .stats { grid-template-columns: 1fr; gap: 40px; }
-    .stat-num { font-size: 44px; }
-  }
-  @media (max-width: 640px) {
-    .hero { padding-top: 64px; }
-    .header-nav a[href="#features"],
-    .header-nav a[href="#privacy"] { display: none; }
-    .cta { flex-direction: column; }
-    .cta .btn { width: 100%; max-width: 320px; }
-  }
-
-  /* ---------- Accessibility ---------- */
   @media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    *, *::before, *::after { animation: none !important; transition: none !important; }
-    .js [data-reveal] { opacity: 1; }
-  }
-  @media (prefers-reduced-transparency: reduce) {
-    .header, .tile { -webkit-backdrop-filter: none; backdrop-filter: none; }
-    .header { background: var(--glass-solid); }
-    .tile { background: var(--card-solid); }
-  }
-  @media (prefers-contrast: more) {
-    .tile { border-color: var(--hairline-strong); }
-    .tile p, .sub, .header-nav a { color: var(--text); }
-    .stat-num { background: none; -webkit-text-fill-color: var(--text); }
+    *,*::before,*::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+    [data-reveal] { opacity:1; transform:none; }
   }
 </style>
 </head>
 <body>
+  <div class="ambient" aria-hidden="true"></div>
   <header class="header">
-    <div class="header-inner">
+    <div class="shell nav">
       <a class="brand" href="#top"><img src="icon.png" alt="">Engram</a>
-      <nav class="header-nav">
+      <nav class="nav-links" aria-label="Main navigation">
         <a href="#features">Features</a>
         <a href="#privacy">Privacy</a>
-        <a class="btn btn-sm" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download</a>
+        <a class="nav-cta" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download <span aria-hidden="true">↗</span></a>
       </nav>
     </div>
   </header>
-
   <main id="top">
-    <!-- Hero: benefit-first headline, then the product itself. -->
-    <section class="hero">
-      <p class="eyebrow" data-reveal>Clipboard history for macOS</p>
-      <h1 data-reveal style="--reveal-delay:.05s">Everything you copy,<br>remembered.</h1>
-      <p class="sub" data-reveal style="--reveal-delay:.10s">Engram is a fast, searchable clipboard history for your Mac. Press a key, search, and copy anything back — text or images, always within reach.</p>
-      <div class="cta" data-reveal style="--reveal-delay:.15s">
-        <a class="btn" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download for macOS</a>
-        <a class="btn-ghost" href="#features">See what it does</a>
+    <section class="shell hero">
+      <div class="hero-copy-block" data-reveal>
+        <p class="eyebrow"><span class="live-dot" aria-hidden="true"></span> The memory layer for your Mac</p>
+        <h1>Your clipboard.<br><span class="gradient-word">Never lost.</span></h1>
+        <p class="hero-copy">Everything you copy, ready when you need it. Search text, revisit images, and get back to what you were doing — with your history kept right on your Mac.</p>
+        <div class="actions">
+          <a class="button button-primary" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">
+            Get Engram <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h11m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <a class="button button-quiet" href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a>
+        </div>
+        <p class="hero-note">Free · macOS 14 or later · No account needed</p>
       </div>
+      <div class="hero-art" aria-label="Illustration of Engram clipboard history" role="img" data-reveal>
+        <div class="orbit" aria-hidden="true"></div>
+        <div class="app-window" aria-hidden="true">
+          <div class="titlebar"><span class="traffic"></span><span class="window-title">Clipboard History</span><span class="keyhint">⌥⌘V</span></div>
+          <div class="window-search"><span class="search-icon"></span><span class="query">project update</span><span class="cursor"></span></div>
+          <div class="filter-row"><span class="filter active">Any time</span><span class="filter">Past hour</span><span class="filter">Yesterday</span><span class="filter">★ Favorites</span></div>
+          <div class="clip-row selected"><span class="clip-icon">¶</span><span class="clip-body"><span class="clip-text">Launch notes — milestones, owners, next steps</span><span class="clip-meta">Notes · just now</span></span><span class="clip-time">now</span></div>
+          <div class="clip-row"><span class="clip-icon link">↗</span><span class="clip-body"><span class="clip-text">https://example.com/project/roadmap</span><span class="clip-meta">Safari · 8m ago</span></span><span class="clip-time">8m</span></div>
+          <div class="clip-row"><span class="clip-icon image">▧</span><span class="clip-body"><span class="clip-text">Image preview · screenshot.png</span><span class="clip-meta">Preview, scan QR · 24m ago</span></span><span class="clip-time">24m</span></div>
+          <div class="clip-row"><span class="clip-icon">⌘</span><span class="clip-body"><span class="clip-text">git checkout -b feature/clipboard-memory</span><span class="clip-meta">Terminal · 1h ago</span></span><span class="clip-time">1h</span></div>
+          <div class="window-footer"><span>Use ↑ ↓ to choose · Return to copy</span><span>1,284 clips</span></div>
+        </div>
+        <div class="floating-chip chip-one" aria-hidden="true"><span class="mini">✦</span><b>Find it in a flash</b></div>
+        <div class="floating-chip chip-two" aria-hidden="true"><span class="mini">▧</span><b>Text + image history</b></div>
+        <div class="floating-chip chip-three" aria-hidden="true"><span class="mini">⌘</span><b>Keyboard-first</b></div>
+      </div>
+      <div class="scroll-cue" aria-hidden="true">Scroll to explore<span></span></div>
+    </section>
 
-      <div class="product-wrap" data-reveal style="--reveal-delay:.2s">
-        <div class="window" aria-hidden="true">
-          <div class="window-titlebar">
-            <span class="tl tl-close"></span><span class="tl tl-min"></span><span class="tl tl-max"></span>
-            <span class="window-title">Engram — Clipboard History</span>
-          </div>
-          <div class="window-body">
-            <div class="mock-search">
-              <span class="mag"></span><span>invoice</span><span class="caret"></span>
-            </div>
-            <div class="mock-filters">
-              <span class="mock-chip selected">Any time</span>
-              <span class="mock-chip">Past hour</span>
-              <span class="mock-chip">Yesterday</span>
-              <span class="mock-chip">Last week</span>
-            </div>
-            <div style="height:8px"></div>
-            <div class="mock-row selected">
-              <span class="mock-text">invoice client payment meeting timesheet</span>
-              <span class="mock-meta">Slack · 2m</span>
-            </div>
-            <div class="mock-row">
-              <span class="mock-text">git checkout -b feat/search</span>
-              <span class="mock-meta">Terminal · 14m</span>
-            </div>
-            <div class="mock-row">
-              <span class="mock-text">https://github.com/behnambm/engram</span>
-              <span class="mock-meta">Safari · 1h</span>
-            </div>
-            <div class="mock-row">
-              <span class="mock-text">npm install @deepseek-ai/dsh</span>
-              <span class="mock-meta">Terminal · 2h</span>
-            </div>
-            <div class="window-status">1,284 clips</div>
-          </div>
+    <section class="proof" aria-label="Engram at a glance">
+      <div class="shell proof-grid">
+        <div class="proof-item"><strong>Private by default</strong><span>Your clips stay on your Mac</span></div>
+        <div class="proof-item"><strong>Ready when you are</strong><span>Open history with a global shortcut</span></div>
+        <div class="proof-item"><strong>Made for real work</strong><span>Text, images, links, and more</span></div>
+      </div>
+    </section>
+
+    <section class="content" id="features">
+      <div class="shell">
+        <div class="section-heading" data-reveal>
+          <p class="eyebrow">A little more recall</p>
+          <h2>Small details.<br>Big relief.</h2>
+          <p>Your clipboard history should feel instant, stay out of the way, and keep your information yours.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature wide" data-reveal>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m15.5 15.5 5 5M8 10.5h5M10.5 8v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+            <h3>Search your whole history</h3><p>Type a word or fragment to bring a clip back into view. Results are ordered by recency, and the list keeps loading as you explore.</p>
+            <div class="feature-art" aria-hidden="true"><div class="tiny-orbit"></div><div class="stack-card"></div><div class="stack-card"></div><div class="stack-card"></div></div>
+          </article>
+          <article class="feature" data-reveal>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Bring a clip back</h3><p>Use the arrows to choose, then press Return or click. The clip goes onto your clipboard, ready to paste.</p>
+          </article>
+          <article class="feature" data-reveal>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Z" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="9" r="1.4" fill="currentColor"/><path d="m5 17 5-5 3 3 2-2 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Images included</h3><p>Keep image clips alongside text, see thumbnails in history, and open a larger preview when you need it.</p>
+          </article>
+          <article class="feature" data-reveal>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zm4 0h2v6h-2zm-4 4h2v2h-2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+            <h3>QR codes, both ways</h3><p>Turn a text clip into a scannable QR image, or scan a QR code in an image clip and copy its contents.</p>
+          </article>
+          <article class="feature" data-reveal>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 14.6 9l5.9.8-4.3 4.2 1 6-5.2-2.8-5.2 2.8 1-6-4.3-4.2L9.4 9 12 3.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+            <h3>Keep your favorites</h3><p>Star the clips you want to keep close. Favorites are protected when older history is trimmed.</p>
+          </article>
+          <article class="feature" data-reveal>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 3v4m8-4v4M4 10h16m-11 4h2m3 0h2m-7 3h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+            <h3>Find it by time</h3><p>Filter history by a recent time window, from the past hour to the last week.</p>
+          </article>
+          <article class="feature" data-reveal>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 19 6v5.2c0 4.2-2.9 7.7-7 9.8-4.1-2.1-7-5.6-7-9.8V6l7-3Z" stroke="currentColor" stroke-width="1.6"/><path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Pause whenever</h3><p>Temporarily stop capture from the menu bar, with a clear status indicator so you know when recording is paused.</p>
+          </article>
+          <article class="feature wide" data-reveal>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3m-11 0h12a2 2 0 0 1 2 2v8H4v-8a2 2 0 0 1 2-2Zm5 4v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Your history belongs to you</h3><p>Engram stores history locally. Set a retention limit, exclude recognized sensitive clipboard types, and decide when recording is on.</p>
+            <div class="feature-art" aria-hidden="true"><div class="stack-card"></div><div class="stack-card"></div><div class="stack-card"></div></div>
+          </article>
         </div>
       </div>
     </section>
 
-    <!-- Stats: the numbers behind "instant". -->
-    <section class="stats">
-      <div data-reveal>
-        <div class="stat-num">&lt;1&nbsp;ms</div>
-        <div class="stat-label">search results, even at 100,000 clips</div>
-      </div>
-      <div data-reveal style="--reveal-delay:.07s">
-        <div class="stat-num">100k</div>
-        <div class="stat-label">clips, and it never gets slower</div>
-      </div>
-      <div data-reveal style="--reveal-delay:.14s">
-        <div class="stat-num">0%</div>
-        <div class="stat-label">CPU while you're not copying</div>
+    <section class="privacy-band" id="privacy">
+      <div class="shell privacy-layout">
+        <div data-reveal><p class="eyebrow">Your clipboard is personal</p><h2>Private, on purpose.</h2><p>Your history lives in a local database on your Mac. No account, no sync service, no telemetry. Engram also skips recognized concealed and transient pasteboard content.</p></div>
+        <div class="privacy-visual" aria-hidden="true" data-reveal><div class="ring"></div><div class="shield"></div></div>
       </div>
     </section>
 
-    <!-- Features: bento grid, flagship tile carries a live-search demo. -->
-    <section id="features" class="section wrap">
-      <div class="section-head">
-        <p class="eyebrow" data-reveal>Features</p>
-        <h2 data-reveal style="--reveal-delay:.05s">Built to feel instant</h2>
-        <p class="sub" data-reveal style="--reveal-delay:.10s">One SQLite database is the only source of truth. Search stays fast as your history grows — no in-memory mirror, no cloud.</p>
-      </div>
-
-      <div class="bento">
-        <div class="tile span-2" data-reveal>
-          <div class="glyph">⚡</div>
-          <h3>Instant search</h3>
-          <p>Search your entire history as you type. Word-prefix search is served by a full-text index that stays sub-millisecond at 100,000 clips.</p>
-          <div class="demo" aria-hidden="true"><span class="mag"></span><span>invoice</span><span class="caret"></span></div>
-        </div>
-        <div class="tile" data-reveal style="--reveal-delay:.06s">
-          <div class="glyph">⌘</div>
-          <h3>Keyboard-first</h3>
-          <p>Arrows to move, Enter to copy, Esc to dismiss. Your hands never leave the keyboard.</p>
-        </div>
-        <div class="tile" data-reveal>
-          <div class="glyph">🧠</div>
-          <h3>Memory with context</h3>
-          <p>Every clip remembers where it came from and when, with relative timestamps.</p>
-        </div>
-        <div class="tile" data-reveal style="--reveal-delay:.06s">
-          <div class="glyph">🖼️</div>
-          <h3>Image history</h3>
-          <p>Copies images and screenshots too, with thumbnails and a one-click magnified preview.</p>
-        </div>
-        <div class="tile" data-reveal style="--reveal-delay:.12s">
-          <div class="glyph">🗓️</div>
-          <h3>Date filters</h3>
-          <p>Narrow your history by time — past hour, past 3 hours, yesterday, or last week.</p>
-        </div>
-        <div class="tile" data-reveal>
-          <div class="glyph">⏸️</div>
-          <h3>Pause anytime</h3>
-          <p>Pause recording any time; the menu-bar dot turns red so you always know.</p>
-        </div>
-        <div class="tile" data-reveal style="--reveal-delay:.06s">
-          <div class="glyph">🔒</div>
-          <h3>Private by design</h3>
-          <p>Stored locally in SQLite — no cloud, no account.</p>
-        </div>
-        <div class="tile" data-reveal style="--reveal-delay:.12s">
-          <div class="glyph">🍃</div>
-          <h3>Lightweight</h3>
-          <p>A native menu-bar app. No Electron, no telemetry, near-zero CPU when idle.</p>
-        </div>
-        <div class="tile tile-wide" data-reveal>
-          <div>
-            <div class="glyph">∞</div>
-            <h3>No limits</h3>
-            <p>Keep unlimited history, or cap it. The list scrolls forever — no hard stop — and duplicates bump to the top.</p>
-          </div>
-          <div>
-            <div class="stat-num">12&nbsp;MB</div>
-            <div class="stat-label">per 10,000 text clips</div>
-          </div>
+    <section class="content" id="how-it-works">
+      <div class="shell">
+        <div class="section-heading" data-reveal><p class="eyebrow">Back to your flow</p><h2>Copy. Find. Carry on.</h2><p>No new habit to learn — just a little more memory when you need it.</p></div>
+        <div class="steps">
+          <article class="step" data-reveal><h3>Copy like you always do</h3><p>Text and images are captured in the background. Pause recording from the menu bar any time.</p></article>
+          <article class="step" data-reveal><h3>Open your history</h3><p>Press ⌥⌘V or click the menu-bar icon. Search, filter, or browse older clips.</p></article>
+          <article class="step" data-reveal><h3>Choose and paste</h3><p>Press Return to put the selected clip on your clipboard, then paste it into the app you were using.</p></article>
         </div>
       </div>
     </section>
 
-    <!-- Privacy: a full-bleed dark band for rhythm and trust. -->
-    <section id="privacy" class="privacy" data-reveal>
-      <div class="glyph">🔒</div>
-      <h2>Everything stays on your Mac.</h2>
-      <p>Engram never phones home. Your history lives in a local SQLite database, and nothing you copy is ever sent to a server.</p>
-      <div class="points">
-        <span class="point">Local only</span>
-        <span class="point">No account</span>
-        <span class="point">No telemetry</span>
-      </div>
-    </section>
-
-    <!-- Download. -->
-    <section class="download-band" id="download">
-      <h2 data-reveal>Install in seconds.</h2>
-      <p class="sub" data-reveal style="--reveal-delay:.05s">Open the disk image, drag Engram into Applications, and keep copying as usual — Engram remembers it all.</p>
-      <div class="cta" data-reveal style="--reveal-delay:.10s">
-        <a class="btn" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download for macOS</a>
-      </div>
-      <p class="hint" data-reveal style="--reveal-delay:.15s">Free · macOS 14+ · lives in your menu bar</p>
+    <section class="shell final-cta" data-reveal>
+      <h2>Make room for one less thing to remember.</h2>
+      <p>Free to use. Built for macOS. Ready when you are.</p>
+      <a class="button button-primary" href="https://github.com/behnambm/engram/releases/latest/download/Engram.dmg">Download Engram <span aria-hidden="true">↗</span></a>
     </section>
   </main>
-
-  <footer>
-    <div class="footer-inner">
-      <span>Engram · a clipboard manager for macOS</span>
-      <div class="footer-links">
-        <a href="#features">Features</a>
-        <a href="#privacy">Privacy</a>
-        <a href="https://github.com/behnambm">GitHub</a>
-      </div>
-    </div>
-  </footer>
-
+  <footer><div class="shell footer-inner"><span>© Engram · A little more recall for macOS</span><nav class="footer-links" aria-label="Footer navigation"><a href="#features">Features</a><a href="#privacy">Privacy</a><a href="https://github.com/behnambm/engram">GitHub</a></nav></div></footer>
   <script>
     (function () {
-      var d = document.documentElement;
-      d.classList.add('js');
-
-      var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
       var header = document.querySelector('.header');
-      function onScroll() {
-        header.classList.toggle('scrolled', window.scrollY > 4);
-      }
-      onScroll();
-      window.addEventListener('scroll', onScroll, { passive: true });
+      function updateHeader() { header.classList.toggle('scrolled', window.scrollY > 8); }
+      updateHeader();
+      window.addEventListener('scroll', updateHeader, { passive: true });
 
-      var targets = Array.prototype.slice.call(document.querySelectorAll('[data-reveal]'));
+      var items = document.querySelectorAll('[data-reveal]');
+      var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (reduceMotion || !('IntersectionObserver' in window)) {
-        targets.forEach(function (el) { el.classList.add('is-visible'); });
+        items.forEach(function (item) { item.classList.add('visible'); });
         return;
       }
-
-      var io = new IntersectionObserver(function (entries) {
+      var observer = new IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
           if (entry.isIntersecting) {
-            entry.target.classList.add('is-visible');
-            io.unobserve(entry.target);
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
           }
         });
-      }, { threshold: 0, rootMargin: '0px 0px -32px 0px' });
-
-      targets.forEach(function (el) { io.observe(el); });
-    })();
+      }, { threshold: .12, rootMargin: '0px 0px -35px 0px' });
+      items.forEach(function (item, index) {
+        item.style.transitionDelay = (index % 3) * 80 + 'ms';
+        observer.observe(item);
+      });
+    }());
   </script>
 </body>
 </html>

@@ -412,6 +412,54 @@ final class HistoryWindowController: NSWindowController {
         window?.close()
     }
 
+    // MARK: - QR code
+
+    /// Scans an image clip for QR codes and copies the first code's payload to the
+    /// clipboard, then closes the window (the same flow as copying a clip). If no QR code
+    /// is found, the window stays open and an alert explains that nothing was copied.
+    private func scanQRCode(_ clip: Clip) {
+        guard clip.isImage,
+              let data = store.imageData(id: clip.id) else { return }
+
+        guard let payload = QRCodeScanner.decodeQRCodes(in: data).first else {
+            let alert = NSAlert()
+            alert.messageText = "No QR code found"
+            alert.informativeText = "Engram scanned this image and did not find a QR code to copy."
+            alert.runModal()
+            return
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(payload, forType: .string)
+        window?.close()
+    }
+
+    /// Generates a QR-code image from a text clip and shows it in the magnified preview
+    /// window. If the text is too long for a QR code, an alert explains that nothing was
+    /// shown.
+    private func generateQRCode(_ clip: Clip) {
+        guard !clip.isImage else { return }
+
+        guard let png = QRCodeGenerator.pngQRCode(for: clip.text),
+              let image = NSImage(data: png) else {
+            let alert = NSAlert()
+            alert.messageText = "Text too long for a QR code"
+            alert.informativeText = "QR codes can only hold a limited amount of text (about 2,300 characters). This clip is too long to encode."
+            alert.runModal()
+            return
+        }
+
+        previewWindow?.close()
+        let controller = ImagePreviewWindowController(image: image)
+        controller.onClose = { [weak self] in
+            guard let self, self.window?.isVisible == true else { return }
+            self.window?.makeKeyAndOrderFront(nil)
+        }
+        previewWindow = controller
+        controller.present()
+    }
+
     // MARK: - Deleting
 
     private func deleteClip(_ clip: Clip) {
@@ -560,7 +608,9 @@ extension HistoryWindowController: NSTableViewDataSource, NSTableViewDelegate {
             onDelete: { [weak self] in self?.deleteClip(clip) },
             onHoverEnter: { [weak self] in self?.selectClip(clip) },
             onPreview: { [weak self] in self?.showPreview(for: clip) },
-            onFavorite: { [weak self] in self?.toggleFavorite(clip) }
+            onFavorite: { [weak self] in self?.toggleFavorite(clip) },
+            onScanQR: { [weak self] in self?.scanQRCode(clip) },
+            onGenerateQR: { [weak self] in self?.generateQRCode(clip) }
         )
     }
 }
@@ -749,14 +799,19 @@ private final class HistoryCellView: NSTableCellView {
     private let onHoverEnter: (@MainActor () -> Void)
     private let onPreview: (@MainActor () -> Void)
     private let onFavorite: (@MainActor () -> Void)
+    private let onScanQR: (@MainActor () -> Void)
+    private let onGenerateQR: (@MainActor () -> Void)
     private let leadingImageView = NSImageView()
     private let textLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     private let trashButton = RingButton(symbolName: "trash.fill", ringColor: .systemRed)
     private let eyeButton = RingButton(symbolName: "eye.fill", ringColor: .systemBlue)
+    private let scanQRButton = RingButton(symbolName: "qrcode.viewfinder", ringColor: .systemTeal)
+    private let genQRButton = RingButton(symbolName: "qrcode", ringColor: .systemIndigo)
     private let starButton = RingButton(symbolName: "star", ringColor: .systemYellow)
-    /// Solid pill that spans the visible action buttons.
-    private let buttonBar = NSView()
+    /// Solid pill that spans the visible action buttons. It is a stack view so hiding a
+    /// button collapses its slot instead of leaving an empty gap in the pill.
+    private let buttonBar = NSStackView()
 
     private var smallSizeConstraints: [NSLayoutConstraint] = []
     private var largeSizeConstraints: [NSLayoutConstraint] = []
@@ -834,13 +889,17 @@ private final class HistoryCellView: NSTableCellView {
         onDelete: @escaping @MainActor () -> Void,
         onHoverEnter: @escaping @MainActor () -> Void,
         onPreview: @escaping @MainActor () -> Void,
-        onFavorite: @escaping @MainActor () -> Void
+        onFavorite: @escaping @MainActor () -> Void,
+        onScanQR: @escaping @MainActor () -> Void,
+        onGenerateQR: @escaping @MainActor () -> Void
     ) {
         self.clip = clip
         self.onDelete = onDelete
         self.onHoverEnter = onHoverEnter
         self.onPreview = onPreview
         self.onFavorite = onFavorite
+        self.onScanQR = onScanQR
+        self.onGenerateQR = onGenerateQR
         super.init(frame: .zero)
 
         leadingImageView.translatesAutoresizingMaskIntoConstraints = false
@@ -884,6 +943,30 @@ private final class HistoryCellView: NSTableCellView {
             userInfo: ["kind": "eye"]
         ))
 
+        scanQRButton.toolTip = "Scan for QR code"
+        scanQRButton.target = self
+        scanQRButton.action = #selector(scanQRTapped)
+        scanQRButton.isHidden = true
+        scanQRButton.translatesAutoresizingMaskIntoConstraints = false
+        scanQRButton.addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: ["kind": "scanQR"]
+        ))
+
+        genQRButton.toolTip = "Generate QR code"
+        genQRButton.target = self
+        genQRButton.action = #selector(genQRTapped)
+        genQRButton.isHidden = true
+        genQRButton.translatesAutoresizingMaskIntoConstraints = false
+        genQRButton.addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: ["kind": "genQR"]
+        ))
+
         starButton.toolTip = clip.isFavorite ? "Remove from favorites" : "Add to favorites"
         starButton.target = self
         starButton.action = #selector(favoriteTapped)
@@ -897,7 +980,13 @@ private final class HistoryCellView: NSTableCellView {
             userInfo: ["kind": "star"]
         ))
 
-        // Solid pill behind the action buttons so the row text can't show through.
+        // The action buttons live in a horizontal stack view so a hidden button (image-only
+        // or text-only) collapses its slot instead of leaving an empty gap in the pill.
+        buttonBar.orientation = .horizontal
+        buttonBar.spacing = 6
+        buttonBar.alignment = .centerY
+        buttonBar.detachesHiddenViews = true
+        buttonBar.edgeInsets = NSEdgeInsets(top: 0, left: 6, bottom: 0, right: 6)
         buttonBar.wantsLayer = true
         buttonBar.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
         buttonBar.layer?.cornerRadius = 14
@@ -909,9 +998,14 @@ private final class HistoryCellView: NSTableCellView {
         addSubview(textLabel)
         addSubview(detailLabel)
         addSubview(buttonBar)
-        addSubview(trashButton)
-        addSubview(eyeButton)
-        addSubview(starButton)
+
+        // Left-to-right order. `detachesHiddenViews` collapses the inapplicable group, so a
+        // text clip shows [generate, star, trash] and an image clip [eye, scan, star, trash].
+        buttonBar.addArrangedSubview(genQRButton)
+        buttonBar.addArrangedSubview(eyeButton)
+        buttonBar.addArrangedSubview(scanQRButton)
+        buttonBar.addArrangedSubview(starButton)
+        buttonBar.addArrangedSubview(trashButton)
 
         leadingImageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14).isActive = true
         leadingImageView.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
@@ -926,40 +1020,31 @@ private final class HistoryCellView: NSTableCellView {
 
         NSLayoutConstraint.activate([
             textLabel.leadingAnchor.constraint(equalTo: leadingImageView.trailingAnchor, constant: 10),
-            textLabel.trailingAnchor.constraint(lessThanOrEqualTo: trashButton.leadingAnchor, constant: -8),
+            textLabel.trailingAnchor.constraint(lessThanOrEqualTo: buttonBar.leadingAnchor, constant: -8),
             textLabel.topAnchor.constraint(equalTo: topAnchor, constant: 7),
 
             detailLabel.leadingAnchor.constraint(equalTo: textLabel.leadingAnchor),
-            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trashButton.leadingAnchor, constant: -8),
+            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: buttonBar.leadingAnchor, constant: -8),
             detailLabel.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: 2),
             detailLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -7),
 
-            trashButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            trashButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            // The stack view owns horizontal placement; each button is a fixed 28x28 slot,
+            // and hidden buttons collapse to nothing so the pill never shows empty space.
             trashButton.widthAnchor.constraint(equalToConstant: 28),
             trashButton.heightAnchor.constraint(equalToConstant: 28),
-
-            starButton.trailingAnchor.constraint(equalTo: trashButton.leadingAnchor, constant: -6),
-            starButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             starButton.widthAnchor.constraint(equalToConstant: 28),
             starButton.heightAnchor.constraint(equalToConstant: 28),
-
-            eyeButton.trailingAnchor.constraint(equalTo: starButton.leadingAnchor, constant: -6),
-            eyeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            genQRButton.widthAnchor.constraint(equalToConstant: 28),
+            genQRButton.heightAnchor.constraint(equalToConstant: 28),
             eyeButton.widthAnchor.constraint(equalToConstant: 28),
             eyeButton.heightAnchor.constraint(equalToConstant: 28),
+            scanQRButton.widthAnchor.constraint(equalToConstant: 28),
+            scanQRButton.heightAnchor.constraint(equalToConstant: 28),
 
-            buttonBar.trailingAnchor.constraint(equalTo: trashButton.trailingAnchor, constant: 6),
+            buttonBar.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             buttonBar.centerYAnchor.constraint(equalTo: centerYAnchor),
             buttonBar.heightAnchor.constraint(equalToConstant: 28),
         ])
-
-        // The pill covers only the visible buttons: the star for text clips, or the
-        // leftmost eye button for image clips.
-        let pillLeadingToStar = buttonBar.leadingAnchor.constraint(equalTo: starButton.leadingAnchor, constant: -6)
-        let pillLeadingToEye = buttonBar.leadingAnchor.constraint(equalTo: eyeButton.leadingAnchor, constant: -6)
-        pillLeadingToStar.isActive = !clip.isImage
-        pillLeadingToEye.isActive = clip.isImage
 
         render()
     }
@@ -982,11 +1067,13 @@ private final class HistoryCellView: NSTableCellView {
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
         switch event.trackingArea?.userInfo?["kind"] as? String {
-        case "trash", "eye", "star":
+        case "trash", "eye", "star", "scanQR", "genQR":
             break
         default:
             trashButton.isHidden = false
             eyeButton.isHidden = !clip.isImage
+            scanQRButton.isHidden = !clip.isImage
+            genQRButton.isHidden = clip.isImage
             starButton.isHidden = false
             buttonBar.isHidden = false
             onHoverEnter()
@@ -996,11 +1083,13 @@ private final class HistoryCellView: NSTableCellView {
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         switch event.trackingArea?.userInfo?["kind"] as? String {
-        case "trash", "eye", "star":
+        case "trash", "eye", "star", "scanQR", "genQR":
             break
         default:
             trashButton.isHidden = true
             eyeButton.isHidden = true
+            scanQRButton.isHidden = true
+            genQRButton.isHidden = true
             starButton.isHidden = true
             buttonBar.isHidden = true
         }
@@ -1018,6 +1107,14 @@ private final class HistoryCellView: NSTableCellView {
         onPreview()
     }
 
+    @objc private func scanQRTapped() {
+        onScanQR()
+    }
+
+    @objc private func genQRTapped() {
+        onGenerateQR()
+    }
+
     @objc private func favoriteTapped() {
         onFavorite()
     }
@@ -1027,6 +1124,8 @@ private final class HistoryCellView: NSTableCellView {
     func resetHover() {
         trashButton.isHidden = true
         eyeButton.isHidden = true
+        scanQRButton.isHidden = true
+        genQRButton.isHidden = true
         starButton.isHidden = true
         buttonBar.isHidden = true
     }
